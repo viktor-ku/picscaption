@@ -63,7 +63,12 @@ export const POST: APIRoute = async ({ request }) => {
       let errorDetail: string;
       try {
         const errorJson = JSON.parse(errorText);
-        errorDetail = errorJson.message || errorJson.error || errorText;
+        // Handle Stability AI's documented error format: { id, name, errors: string[] }
+        if (Array.isArray(errorJson.errors) && errorJson.errors.length > 0) {
+          errorDetail = errorJson.errors.join("; ");
+        } else {
+          errorDetail = errorJson.message || errorJson.error || errorText;
+        }
       } catch {
         errorDetail = errorText;
       }
