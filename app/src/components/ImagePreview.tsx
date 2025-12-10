@@ -887,9 +887,9 @@ export function ImagePreview({
   return (
     <div className="h-full bg-preview-bg flex flex-col">
       {/* Action bar header */}
-      {hasAnyEnabledProvider && (
-        <div className="flex-shrink-0 flex items-center justify-center py-2 px-4">
-          {/* Upscale label + buttons */}
+      <div className="flex-shrink-0 flex items-center justify-center py-2 px-4">
+        {/* Upscale label + buttons - only show when providers are configured */}
+        {hasAnyEnabledProvider && (
           <div className="group relative flex items-center gap-2">
             <div
               className={`flex items-center gap-1.5 text-sm font-medium ${
@@ -1043,39 +1043,57 @@ export function ImagePreview({
               </div>
             )}
           </div>
+        )}
 
-          {/* Divider */}
-          <div className="w-px h-6 bg-white/20 mx-3" />
+        {/* Divider - only show when upscale section is visible */}
+        {hasAnyEnabledProvider && <div className="w-px h-6 bg-white/20 mx-3" />}
 
-          {/* Crop section */}
-          <div className="flex items-center gap-2">
-            <div
-              className={`flex items-center gap-1.5 text-sm font-medium ${
-                hasPendingCrop ? "text-primary" : "text-white/80"
-              }`}
+        {/* Crop section */}
+        <div className="flex items-center gap-2">
+          <div
+            className={`flex items-center gap-1.5 text-sm font-medium ${
+              hasPendingCrop ? "text-primary" : "text-white/80"
+            }`}
+          >
+            <CropIcon className="w-4 h-4" />
+            <span>Crop</span>
+          </div>
+
+          {hasPendingCrop ? (
+            <button
+              type="button"
+              onClick={onCancelCrop}
+              className="px-2.5 py-1 rounded-md text-xs font-semibold bg-white/15 hover:bg-white/25 text-white cursor-pointer transition-all"
             >
-              <CropIcon className="w-4 h-4" />
-              <span>Crop</span>
-            </div>
-
-            {hasPendingCrop ? (
+              Cancel
+            </button>
+          ) : (
+            <div className="flex gap-1.5 ml-1">
               <button
                 type="button"
-                onClick={onCancelCrop}
-                className="px-2.5 py-1 rounded-md text-xs font-semibold bg-white/15 hover:bg-white/25 text-white cursor-pointer transition-all"
+                onClick={() => handleStartCrop(1)}
+                disabled={
+                  cropMode === "cropping" || currentUpscaleData.state !== "idle"
+                }
+                className={`
+                    px-2.5 py-1 rounded-md text-xs font-semibold
+                    transition-all
+                    ${
+                      cropMode === "idle" && currentUpscaleData.state === "idle"
+                        ? "bg-white/15 hover:bg-white/25 text-white cursor-pointer"
+                        : "bg-white/5 text-white/30 cursor-not-allowed"
+                    }
+                  `}
               >
-                Cancel
+                1:1
               </button>
-            ) : (
-              <div className="flex gap-1.5 ml-1">
-                <button
-                  type="button"
-                  onClick={() => handleStartCrop(1)}
-                  disabled={
-                    cropMode === "cropping" ||
-                    currentUpscaleData.state !== "idle"
-                  }
-                  className={`
+              <button
+                type="button"
+                onClick={() => handleStartCrop(undefined)}
+                disabled={
+                  cropMode === "cropping" || currentUpscaleData.state !== "idle"
+                }
+                className={`
                     px-2.5 py-1 rounded-md text-xs font-semibold
                     transition-all
                     ${
@@ -1084,33 +1102,13 @@ export function ImagePreview({
                         : "bg-white/5 text-white/30 cursor-not-allowed"
                     }
                   `}
-                >
-                  1:1
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleStartCrop(undefined)}
-                  disabled={
-                    cropMode === "cropping" ||
-                    currentUpscaleData.state !== "idle"
-                  }
-                  className={`
-                    px-2.5 py-1 rounded-md text-xs font-semibold
-                    transition-all
-                    ${
-                      cropMode === "idle" && currentUpscaleData.state === "idle"
-                        ? "bg-white/15 hover:bg-white/25 text-white cursor-pointer"
-                        : "bg-white/5 text-white/30 cursor-not-allowed"
-                    }
-                  `}
-                >
-                  Free
-                </button>
-              </div>
-            )}
-          </div>
+              >
+                Free
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Image container */}
       <div className="flex-1 flex items-center justify-center p-4 relative min-h-0">
