@@ -11,6 +11,7 @@ import {
   hasImageExtension,
   supportsDirectoryPicker,
 } from "../lib/image-utils";
+import { useUser } from "./useUser";
 
 interface UseFileHandlingOptions {
   images: ImageData[];
@@ -31,9 +32,13 @@ export function useFileHandling({
 }: UseFileHandlingOptions) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const directoryHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
+  const { ensureUser } = useUser();
 
   const finalizeImages = useCallback(
     (newImages: ImageData[], directoryName: string) => {
+      // Ensure user exists (creates anonymous user on first upload if needed)
+      ensureUser();
+
       setCurrentDirectory(directoryName);
       // Direct set with new array
       setImages(newImages);
@@ -82,7 +87,13 @@ export function useFileHandling({
         },
       );
     },
-    [setCurrentDirectory, setImages, setSelectedImageId, setErrorMessage],
+    [
+      setCurrentDirectory,
+      setImages,
+      setSelectedImageId,
+      setErrorMessage,
+      ensureUser,
+    ],
   );
 
   const processFiles = useCallback(

@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
+import { ConvexClientProvider } from "./ConvexClientProvider";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -14,9 +15,11 @@ const queryClient = new QueryClient({
 export function AppWrapper() {
   return (
     <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
+      <ConvexClientProvider>
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      </ConvexClientProvider>
     </StrictMode>
   );
 }

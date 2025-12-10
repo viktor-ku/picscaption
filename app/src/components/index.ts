@@ -10,3 +10,7 @@ export { SettingsModal, type SettingsSection } from "./SettingsModal";
 export { Toggle } from "./Toggle";
 export { DeleteAllDataModal } from "./DeleteAllDataModal";
 export { BulkUpscaleModal } from "./BulkUpscaleModal";
+export {
+  ConvexClientProvider,
+  useConvexAvailable,
+} from "./ConvexClientProvider";
