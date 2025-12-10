@@ -1,0 +1,7 @@
+---
+applyAlways: true
+---
+
+Never run dev server on your own. Never ask about it either.
+
+When you must test something in the web browser open an existing page with testing capabilities using Chrome.

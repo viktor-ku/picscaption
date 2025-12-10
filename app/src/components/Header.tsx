@@ -207,7 +207,7 @@ export function Header({
           </Menu>
           {/* More options dropdown */}
           <Menu as="div" className="relative">
-            {({ open }) => (
+            {() => (
               <Fragment>
                 <MenuButton
                   className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"

@@ -1,0 +1,4 @@
+[tasks.dev]
+run = [
+  "cd app && bun dev",
+]

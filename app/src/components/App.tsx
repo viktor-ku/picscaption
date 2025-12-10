@@ -14,8 +14,8 @@ import {
   RestoreHistoryModal,
   SettingsModal,
   DeleteAllDataModal,
-} from "./components";
-import type { ImageData } from "./types";
+} from "./index";
+import type { ImageData } from "../types";
 import {
   getCaptionsByDirectory,
   saveCaptions,
@@ -23,9 +23,9 @@ import {
   clearAllData,
   makeKey,
   type StoredCaption,
-} from "./lib/storage";
-import { getSettings, saveSettings, type Settings } from "./lib/settings";
-import { UpscaleClient } from "./lib/ai3-upscale-client";
+} from "../lib/storage";
+import { getSettings, saveSettings, type Settings } from "../lib/settings";
+import { UpscaleClient } from "../lib/ai3-upscale-client";
 import pica from "pica";
 
 // Pica instance for high-quality image resizing (Lanczos3)
@@ -163,7 +163,7 @@ interface BulkUpscaleProgress {
   total: number;
 }
 
-function App() {
+export function App() {
   const [images, setImages] = useState<ImageData[]>([]);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [currentDirectory, setCurrentDirectory] = useState<string | null>(null);
@@ -175,10 +175,16 @@ function App() {
     useState<BulkUpscaleProgress | null>(null);
   const [isDeleteAllDataOpen, setIsDeleteAllDataOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
     const params = new URLSearchParams(window.location.search);
     return params.get("settings") === "1";
   });
-  const [settings, setSettings] = useState<Settings>(getSettings);
+  const [settings, setSettings] = useState<Settings>(() => {
+    if (typeof window === "undefined") {
+      return { upscaleServerUrl: "", allowDeletions: true };
+    }
+    return getSettings();
+  });
 
   // Create upscale client if URL is configured
   const upscaleClient = useMemo(() => {
@@ -232,6 +238,7 @@ function App() {
 
   // Sync settings drawer state with URL
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
     if (isSettingsOpen) {
       url.searchParams.set("settings", "1");
@@ -1195,16 +1202,14 @@ function App() {
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't handle if user is typing in an input/textarea
       const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
-        return;
-      }
+      const isInInput =
+        target.tagName === "INPUT" || target.tagName === "TEXTAREA";
 
       const key = e.key.toLowerCase();
       const isCtrl = e.ctrlKey || e.metaKey;
 
-      // Ctrl+Z for undo (works even with no images loaded)
+      // Ctrl+Z for undo (works even with no images loaded, even in inputs)
       if (key === "z" && isCtrl) {
         // Undo most recent action: crop first, then deletion
         if (pendingCrop) {
@@ -1217,6 +1222,12 @@ function App() {
           handleUndoDelete(pendingDeletion);
           return;
         }
+        // If no pending undo, let native browser undo work
+        return;
+      }
+
+      // Don't handle other keys if user is typing in an input/textarea
+      if (isInInput) {
         return;
       }
 
@@ -1589,5 +1600,3 @@ function App() {
     </div>
   );
 }
-
-export default App;
