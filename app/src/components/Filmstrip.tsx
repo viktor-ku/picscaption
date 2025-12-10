@@ -104,13 +104,17 @@ export function Filmstrip({
                 hasCaption ? "border-caption-ready" : "border-transparent",
               )}
             >
-              <img
-                src={image.objectUrl}
-                alt={image.fileName}
-                className="w-full h-full object-cover"
-                loading="lazy"
-                onError={() => handleImageError(image.id)}
-              />
+              {image.thumbnailUrl ? (
+                <img
+                  src={image.thumbnailUrl}
+                  alt={image.fileName}
+                  className="w-full h-full object-cover transition-opacity duration-200"
+                  loading="lazy"
+                  onError={() => handleImageError(image.id)}
+                />
+              ) : (
+                <div className="w-full h-full bg-gray-300 animate-pulse" />
+              )}
               {isSelected && (
                 <div className="absolute inset-0 bg-white/40 flex items-center justify-center">
                   <EyeIcon />

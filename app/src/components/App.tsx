@@ -28,6 +28,11 @@ import {
 import { getSettings, saveSettings, type Settings } from "../lib/settings";
 import { UpscaleClient } from "../lib/ai3-upscale-client";
 import { StabilityUpscaleClient } from "../lib/stability-upscale-client";
+import {
+  generateThumbnailsBatch,
+  loadFullImage,
+  unloadFullImage,
+} from "../lib/thumbnail";
 import pica from "pica";
 
 // Pica instance for high-quality image resizing (Lanczos3)
@@ -264,14 +269,100 @@ export function App() {
     imagesRef.current = images;
   }, [images]);
 
-  // Cleanup object URLs on unmount
+  // Cleanup thumbnail and full image URLs on unmount
   useEffect(() => {
     return () => {
       for (const img of imagesRef.current) {
-        URL.revokeObjectURL(img.objectUrl);
+        if (img.thumbnailUrl) URL.revokeObjectURL(img.thumbnailUrl);
+        if (img.fullImageUrl) URL.revokeObjectURL(img.fullImageUrl);
       }
     };
   }, []);
+
+  // Sliding window for full image loading/unloading
+  // Load full images for selected image ± PRELOAD_WINDOW, unload others
+  const PRELOAD_WINDOW = 1;
+  useEffect(() => {
+    if (images.length === 0 || !selectedImageId) return;
+
+    const currentIdx = images.findIndex((img) => img.id === selectedImageId);
+    if (currentIdx === -1) return;
+
+    // Track pending dimension loaders so we can cancel them on cleanup
+    const pendingLoaders: HTMLImageElement[] = [];
+    let cancelled = false;
+
+    // Calculate which indices should have full images loaded
+    const windowStart = Math.max(0, currentIdx - PRELOAD_WINDOW);
+    const windowEnd = Math.min(images.length - 1, currentIdx + PRELOAD_WINDOW);
+    const indicesInWindow = new Set<number>();
+    for (let i = windowStart; i <= windowEnd; i++) {
+      indicesInWindow.add(i);
+    }
+
+    // Determine which images need loading and which need unloading
+    const updates: { id: string; fullImageUrl: string | null }[] = [];
+    const imagesToLoadDimensions: { id: string; url: string }[] = [];
+
+    images.forEach((img, idx) => {
+      const shouldBeLoaded = indicesInWindow.has(idx);
+      const isLoaded = img.fullImageUrl !== null;
+
+      if (shouldBeLoaded && !isLoaded) {
+        // Load this image
+        const fullImageUrl = loadFullImage(img.file);
+        updates.push({ id: img.id, fullImageUrl });
+        // Also load dimensions if not yet known
+        if (img.width === undefined || img.height === undefined) {
+          imagesToLoadDimensions.push({ id: img.id, url: fullImageUrl });
+        }
+      } else if (!shouldBeLoaded && isLoaded && img.fullImageUrl) {
+        // Unload this image - revokes blob URL to free memory
+        unloadFullImage(img.fullImageUrl);
+        updates.push({ id: img.id, fullImageUrl: null });
+      }
+    });
+
+    // Apply URL updates if any
+    if (updates.length > 0) {
+      setImages((prev) =>
+        prev.map((img) => {
+          const update = updates.find((u) => u.id === img.id);
+          return update ? { ...img, fullImageUrl: update.fullImageUrl } : img;
+        }),
+      );
+    }
+
+    // Load dimensions asynchronously for newly loaded images
+    for (const { id, url } of imagesToLoadDimensions) {
+      const imgElement = new Image();
+      pendingLoaders.push(imgElement);
+      imgElement.onload = () => {
+        // Skip if effect was cleaned up (user switched away)
+        if (cancelled) return;
+        setImages((prev) =>
+          prev.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  width: imgElement.naturalWidth,
+                  height: imgElement.naturalHeight,
+                }
+              : item,
+          ),
+        );
+      };
+      imgElement.src = url;
+    }
+
+    // Cleanup: cancel pending dimension loads when switching away
+    return () => {
+      cancelled = true;
+      for (const loader of pendingLoaders) {
+        loader.src = ""; // Cancel any pending load/decode
+      }
+    };
+  }, [selectedImageId, images.length]); // Only depend on selectedImageId and length to avoid infinite loops
 
   // Sync settings drawer state with URL
   useEffect(() => {
@@ -329,7 +420,7 @@ export function App() {
     };
   }, [images, currentDirectory]);
 
-  // Helper to finalize images (set state and load dimensions)
+  // Helper to finalize images (set state and start progressive thumbnail generation)
   const finalizeImages = useCallback(
     (newImages: ImageData[], directoryName: string) => {
       setCurrentDirectory(directoryName);
@@ -337,24 +428,27 @@ export function App() {
       setSelectedImageId(newImages[0]?.id ?? null);
       setErrorMessage(null);
 
-      // Load image dimensions asynchronously
-      newImages.forEach((imageData) => {
-        const img = new Image();
-        img.onload = () => {
+      // Start progressive thumbnail generation in the background
+      const files = newImages.map((img) => img.file);
+      generateThumbnailsBatch(
+        files,
+        (index, thumbnailUrl) => {
+          const imageId = newImages[index]?.id;
+          if (!imageId) return;
+
           setImages((prev) =>
             prev.map((item) =>
-              item.id === imageData.id
-                ? {
-                    ...item,
-                    width: img.naturalWidth,
-                    height: img.naturalHeight,
-                  }
-                : item,
+              item.id === imageId ? { ...item, thumbnailUrl } : item,
             ),
           );
-        };
-        img.src = imageData.objectUrl;
-      });
+        },
+        (index, error) => {
+          console.error(
+            `Failed to generate thumbnail for ${newImages[index]?.fileName}:`,
+            error,
+          );
+        },
+      );
     },
     [],
   );
@@ -362,9 +456,10 @@ export function App() {
   // Process files from either File System Access API or file input
   const processFiles = useCallback(
     async (files: File[], directoryName: string) => {
-      // Revoke old object URLs
+      // Revoke old thumbnail and full image URLs
       for (const img of images) {
-        URL.revokeObjectURL(img.objectUrl);
+        if (img.thumbnailUrl) URL.revokeObjectURL(img.thumbnailUrl);
+        if (img.fullImageUrl) URL.revokeObjectURL(img.fullImageUrl);
       }
 
       // Filter and process image files
@@ -391,11 +486,12 @@ export function App() {
         }),
       );
 
-      // Create image data objects
+      // Create image data objects with null URLs (thumbnails generated progressively)
       const newImages: ImageData[] = imageFiles.map((file, index) => ({
         id: `${index}-${file.name}`,
         file,
-        objectUrl: URL.createObjectURL(file),
+        thumbnailUrl: null, // Generated progressively in finalizeImages
+        fullImageUrl: null, // Loaded on demand when selected
         fileName: file.name,
         namespace: directoryName,
         caption: "",
@@ -633,8 +729,11 @@ export function App() {
         }
       }
 
-      // Revoke the object URL
-      URL.revokeObjectURL(brokenImage.objectUrl);
+      // Revoke the URLs
+      if (brokenImage.thumbnailUrl)
+        URL.revokeObjectURL(brokenImage.thumbnailUrl);
+      if (brokenImage.fullImageUrl)
+        URL.revokeObjectURL(brokenImage.fullImageUrl);
     },
     [images, selectedImageId, currentDirectory],
   );
@@ -878,11 +977,13 @@ export function App() {
             type: finalBlob.type || "image/png",
           });
 
-          // Create new object URL
-          const newObjectUrl = URL.createObjectURL(newFile);
+          // Create new full image URL
+          const newFullImageUrl = URL.createObjectURL(newFile);
 
-          // Revoke old object URL
-          URL.revokeObjectURL(imageData.objectUrl);
+          // Revoke old full image URL if it exists
+          if (imageData.fullImageUrl) {
+            URL.revokeObjectURL(imageData.fullImageUrl);
+          }
 
           // Update image in state
           setImages((prev) =>
@@ -891,7 +992,7 @@ export function App() {
                 ? {
                     ...img,
                     file: newFile,
-                    objectUrl: newObjectUrl,
+                    fullImageUrl: newFullImageUrl,
                     width: finalWidth,
                     height: finalHeight,
                   }
@@ -945,9 +1046,10 @@ export function App() {
       // Clear localStorage
       localStorage.clear();
 
-      // Revoke all object URLs
+      // Revoke all image URLs
       for (const img of images) {
-        URL.revokeObjectURL(img.objectUrl);
+        if (img.thumbnailUrl) URL.revokeObjectURL(img.thumbnailUrl);
+        if (img.fullImageUrl) URL.revokeObjectURL(img.fullImageUrl);
       }
 
       // Reset UI state
@@ -985,8 +1087,11 @@ export function App() {
         }
       }
 
-      // Revoke object URL
-      URL.revokeObjectURL(pending.image.objectUrl);
+      // Revoke image URLs
+      if (pending.image.thumbnailUrl)
+        URL.revokeObjectURL(pending.image.thumbnailUrl);
+      if (pending.image.fullImageUrl)
+        URL.revokeObjectURL(pending.image.fullImageUrl);
     },
     [currentDirectory],
   );
@@ -1160,11 +1265,13 @@ export function App() {
         type: newBlob.type || "image/png",
       });
 
-      // Create new object URL
-      const newObjectUrl = URL.createObjectURL(newFile);
+      // Create new full image URL
+      const newFullImageUrl = URL.createObjectURL(newFile);
 
-      // Revoke old object URL
-      URL.revokeObjectURL(imageToUpdate.objectUrl);
+      // Revoke old full image URL
+      if (imageToUpdate.fullImageUrl) {
+        URL.revokeObjectURL(imageToUpdate.fullImageUrl);
+      }
 
       // Update image in state
       setImages((prev) =>
@@ -1173,7 +1280,7 @@ export function App() {
             ? {
                 ...img,
                 file: newFile,
-                objectUrl: newObjectUrl,
+                fullImageUrl: newFullImageUrl,
                 width: newWidth,
                 height: newHeight,
               }
@@ -1222,11 +1329,13 @@ export function App() {
         type: pending.originalType,
       });
 
-      // Create new object URL
-      const restoredObjectUrl = URL.createObjectURL(restoredFile);
+      // Create new full image URL
+      const restoredFullImageUrl = URL.createObjectURL(restoredFile);
 
-      // Revoke current object URL
-      URL.revokeObjectURL(imageToRestore.objectUrl);
+      // Revoke current full image URL
+      if (imageToRestore.fullImageUrl) {
+        URL.revokeObjectURL(imageToRestore.fullImageUrl);
+      }
 
       // Restore image in state
       setImages((prev) =>
@@ -1235,7 +1344,7 @@ export function App() {
             ? {
                 ...img,
                 file: restoredFile,
-                objectUrl: restoredObjectUrl,
+                fullImageUrl: restoredFullImageUrl,
                 width: pending.originalWidth,
                 height: pending.originalHeight,
               }
@@ -1391,11 +1500,13 @@ export function App() {
         type: newBlob.type || "image/png",
       });
 
-      // Create new object URL
-      const newObjectUrl = URL.createObjectURL(newFile);
+      // Create new full image URL
+      const newFullImageUrl = URL.createObjectURL(newFile);
 
-      // Revoke old object URL
-      URL.revokeObjectURL(imageToUpdate.objectUrl);
+      // Revoke old full image URL
+      if (imageToUpdate.fullImageUrl) {
+        URL.revokeObjectURL(imageToUpdate.fullImageUrl);
+      }
 
       // Update image in state
       setImages((prev) =>
@@ -1404,7 +1515,7 @@ export function App() {
             ? {
                 ...img,
                 file: newFile,
-                objectUrl: newObjectUrl,
+                fullImageUrl: newFullImageUrl,
                 width: newWidth,
                 height: newHeight,
               }

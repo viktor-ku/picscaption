@@ -1,4 +1,11 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  useTransition,
+} from "react";
 import {
   ImageIcon,
   Sparkles,
@@ -216,6 +223,51 @@ export function ImagePreview({
   const [lastCropAspect, setLastCropAspect] = useState<number | undefined>(1); // Default to 1:1
   const cropImageRef = useRef<HTMLImageElement>(null);
 
+  // Track whether the full image has loaded
+  const [fullImageReady, setFullImageReady] = useState(false);
+  const [, startTransition] = useTransition();
+  const selectedImageId = selectedImage?.id ?? "";
+
+  // Ref to hold the current image loader so we can cancel it
+  const imageLoaderRef = useRef<HTMLImageElement | null>(null);
+
+  // Load the full image with cancellation support
+  useEffect(() => {
+    setFullImageReady(false);
+
+    // Cancel any previous load
+    if (imageLoaderRef.current) {
+      imageLoaderRef.current.src = ""; // Cancel pending load/decode
+      imageLoaderRef.current = null;
+    }
+
+    const displayUrl = selectedImage?.fullImageUrl;
+    if (!displayUrl) return;
+
+    // Create new loader
+    const loader = new Image();
+    imageLoaderRef.current = loader;
+
+    loader.onload = () => {
+      // Verify this loader is still the current one (not stale)
+      if (imageLoaderRef.current !== loader) return;
+
+      startTransition(() => {
+        setFullImageReady(true);
+      });
+    };
+
+    loader.src = displayUrl;
+
+    // Cleanup: cancel load when switching away or unmounting
+    return () => {
+      loader.src = ""; // Cancel pending load/decode
+      if (imageLoaderRef.current === loader) {
+        imageLoaderRef.current = null;
+      }
+    };
+  }, [selectedImageId, selectedImage?.fullImageUrl]);
+
   // Get enabled providers in order
   const enabledProviders = useMemo(
     () => upscaleProviders.filter((p) => p.enabled),
@@ -223,7 +275,6 @@ export function ImagePreview({
   );
   const hasUpscaleUrl = Boolean(upscaleServerUrl?.trim());
   const hasAnyEnabledProvider = enabledProviders.length > 0;
-  const selectedImageId = selectedImage?.id ?? "";
 
   // Create AI3 client as memoized value
   const ai3Client = useMemo(() => {
@@ -672,6 +723,7 @@ export function ImagePreview({
   useEffect(() => {
     if (
       !selectedImage ||
+      !selectedImage.fullImageUrl ||
       cropMode === "cropping" ||
       currentUpscaleData.state !== "idle"
     )
@@ -873,16 +925,22 @@ export function ImagePreview({
   const isUpscaling = currentUpscaleData.state === "upscaling";
   const isConfirming = currentUpscaleData.state === "confirming";
   const isSaving = currentUpscaleData.state === "saving";
+  const hasFullImage = selectedImage.fullImageUrl !== null;
   const canUpscale =
     hasAnyEnabledProvider &&
     isAnyProviderAvailable &&
+    hasFullImage &&
     currentUpscaleData.state === "idle";
 
-  // Show upscaled preview during confirming/saving, otherwise show original
+  // Show upscaled preview during confirming/saving, otherwise show full image
+  // fullImageUrl may be null while loading (lazy loading)
   const displayUrl =
     (isConfirming || isSaving) && currentUpscaleData.url
       ? currentUpscaleData.url
-      : selectedImage.objectUrl;
+      : selectedImage.fullImageUrl;
+
+  // Show thumbnail placeholder until full image is loaded
+  const showThumbnailPlaceholder = !fullImageReady || !displayUrl;
 
   return (
     <div className="h-full bg-preview-bg flex flex-col">
@@ -1073,13 +1131,17 @@ export function ImagePreview({
                 type="button"
                 onClick={() => handleStartCrop(1)}
                 disabled={
-                  cropMode === "cropping" || currentUpscaleData.state !== "idle"
+                  cropMode === "cropping" ||
+                  currentUpscaleData.state !== "idle" ||
+                  !hasFullImage
                 }
                 className={`
                     px-2.5 py-1 rounded-md text-xs font-semibold
                     transition-all
                     ${
-                      cropMode === "idle" && currentUpscaleData.state === "idle"
+                      cropMode === "idle" &&
+                      currentUpscaleData.state === "idle" &&
+                      hasFullImage
                         ? "bg-white/15 hover:bg-white/25 text-white cursor-pointer"
                         : "bg-white/5 text-white/30 cursor-not-allowed"
                     }
@@ -1091,13 +1153,17 @@ export function ImagePreview({
                 type="button"
                 onClick={() => handleStartCrop(undefined)}
                 disabled={
-                  cropMode === "cropping" || currentUpscaleData.state !== "idle"
+                  cropMode === "cropping" ||
+                  currentUpscaleData.state !== "idle" ||
+                  !hasFullImage
                 }
                 className={`
                     px-2.5 py-1 rounded-md text-xs font-semibold
                     transition-all
                     ${
-                      cropMode === "idle" && currentUpscaleData.state === "idle"
+                      cropMode === "idle" &&
+                      currentUpscaleData.state === "idle" &&
+                      hasFullImage
                         ? "bg-white/15 hover:bg-white/25 text-white cursor-pointer"
                         : "bg-white/5 text-white/30 cursor-not-allowed"
                     }
@@ -1112,17 +1178,34 @@ export function ImagePreview({
 
       {/* Image container */}
       <div className="flex-1 flex items-center justify-center p-4 relative min-h-0">
-        {/* Always render the base image to maintain consistent sizing */}
-        <img
-          ref={cropImageRef}
-          src={displayUrl}
-          alt={selectedImage.fileName}
-          className="max-w-full max-h-full object-contain shadow-2xl shadow-black/40"
-          style={{ visibility: cropMode === "cropping" ? "hidden" : "visible" }}
-        />
+        {/* Thumbnail placeholder - stretched to fill preview area while loading */}
+        {showThumbnailPlaceholder &&
+          cropMode !== "cropping" &&
+          selectedImage.thumbnailUrl && (
+            <div className="absolute inset-0 p-4 flex items-center justify-center">
+              <img
+                src={selectedImage.thumbnailUrl}
+                alt={selectedImage.fileName}
+                className="w-full h-full object-contain shadow-2xl shadow-black/40"
+              />
+            </div>
+          )}
+
+        {/* Full image - shown when ready (hidden during crop mode, crop overlay uses its own image) */}
+        {displayUrl && fullImageReady && (
+          <img
+            ref={cropImageRef}
+            src={displayUrl}
+            alt={selectedImage.fileName}
+            className="max-w-full max-h-full object-contain shadow-2xl shadow-black/40"
+            style={{
+              visibility: cropMode === "cropping" ? "hidden" : "visible",
+            }}
+          />
+        )}
 
         {/* Crop overlay - positioned absolutely over the image */}
-        {cropMode === "cropping" && cropImageRef.current && (
+        {cropMode === "cropping" && cropImageRef.current && displayUrl && (
           <div
             className="absolute"
             style={{
