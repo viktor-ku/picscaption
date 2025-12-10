@@ -27,6 +27,7 @@ import {
 } from "../lib/storage";
 import { getSettings, saveSettings, type Settings } from "../lib/settings";
 import { UpscaleClient } from "../lib/ai3-upscale-client";
+import { StabilityUpscaleClient } from "../lib/stability-upscale-client";
 import pica from "pica";
 
 // Pica instance for high-quality image resizing (Lanczos3)
@@ -180,7 +181,11 @@ export function App() {
       if (typeof window === "undefined") return null;
       const params = new URLSearchParams(window.location.search);
       const section = params.get("settings");
-      if (section === "general" || section === "profile") {
+      if (
+        section === "general" ||
+        section === "upscale" ||
+        section === "profile"
+      ) {
         return section;
       }
       return null;
@@ -189,7 +194,12 @@ export function App() {
   const [settings, setSettings] = useState<Settings>(() => {
     if (typeof window === "undefined") {
       return {
+        upscaleProviders: [
+          { id: "ai3" as const, enabled: true },
+          { id: "stability" as const, enabled: false },
+        ],
         upscaleServerUrl: "",
+        stabilityApiKey: "",
         allowDeletions: true,
         profileName: "",
         profileEmail: "",
@@ -198,8 +208,8 @@ export function App() {
     return getSettings();
   });
 
-  // Create upscale client if URL is configured
-  const upscaleClient = useMemo(() => {
+  // Create AI3 upscale client if URL is configured
+  const ai3UpscaleClient = useMemo(() => {
     const url = settings.upscaleServerUrl?.trim();
     if (url) {
       return new UpscaleClient(url);
@@ -207,16 +217,31 @@ export function App() {
     return null;
   }, [settings.upscaleServerUrl]);
 
-  // Check upscale server availability on app load (if URL is configured)
+  // Create Stability upscale client
+  const stabilityUpscaleClient = useMemo(() => {
+    const key = settings.stabilityApiKey?.trim();
+    return new StabilityUpscaleClient(key || undefined);
+  }, [settings.stabilityApiKey]);
+
+  // Check AI3 upscale server availability on app load (if URL is configured)
   // This pre-warms the cache so ImagePreview can use the result immediately
   useQuery({
     queryKey: ["upscale-server-status", settings.upscaleServerUrl],
     queryFn: async () => {
-      if (!upscaleClient) return false;
-      await upscaleClient.ping();
+      if (!ai3UpscaleClient) return false;
+      await ai3UpscaleClient.ping();
       return true;
     },
-    enabled: upscaleClient !== null,
+    enabled: ai3UpscaleClient !== null,
+    retry: false,
+  });
+
+  // Check Stability API availability
+  useQuery({
+    queryKey: ["stability-server-status", settings.stabilityApiKey],
+    queryFn: async () => {
+      return stabilityUpscaleClient.ping();
+    },
     retry: false,
   });
 
@@ -738,10 +763,47 @@ export function App() {
     setImages((prev) => prev.map((img) => ({ ...img, caption })));
   }, []);
 
+  // Helper to try upscale with fallback through enabled providers
+  const tryUpscaleWithFallback = useCallback(
+    async (
+      sourceBlob: Blob,
+    ): Promise<{ blob: Blob; scaleFactor: number } | null> => {
+      const enabledProviders = settings.upscaleProviders.filter(
+        (p) => p.enabled,
+      );
+
+      for (const provider of enabledProviders) {
+        try {
+          if (provider.id === "ai3" && ai3UpscaleClient) {
+            const blob = await ai3UpscaleClient.upscale(sourceBlob, {
+              scale: 2,
+            });
+            return { blob, scaleFactor: 2 };
+          }
+          if (provider.id === "stability") {
+            const blob = await stabilityUpscaleClient.upscale(sourceBlob);
+            return { blob, scaleFactor: 4 };
+          }
+        } catch (err) {
+          console.warn(
+            `Upscale with ${provider.id} failed, trying next...`,
+            err,
+          );
+          // Continue to next provider
+        }
+      }
+      return null; // All providers failed
+    },
+    [settings.upscaleProviders, ai3UpscaleClient, stabilityUpscaleClient],
+  );
+
   // Bulk upscale all images to target dimensions
   const handleBulkUpscale = useCallback(
     async (targetWidth: number, targetHeight: number) => {
-      if (!upscaleClient || images.length === 0) return;
+      const enabledProviders = settings.upscaleProviders.filter(
+        (p) => p.enabled,
+      );
+      if (enabledProviders.length === 0 || images.length === 0) return;
 
       // Set initial progress
       setBulkUpscaleProgress({ current: 0, total: images.length });
@@ -774,23 +836,20 @@ export function App() {
             (currentWidth < targetWidth || currentHeight < targetHeight) &&
             iterations < MAX_UPSCALE_ITERATIONS
           ) {
-            try {
-              // Run 2x upscale
-              const upscaledBlob = await upscaleClient.upscale(sourceBlob, {
-                scale: 2,
-              });
-              // Success - update our best result
-              sourceBlob = upscaledBlob;
-              currentWidth *= 2;
-              currentHeight *= 2;
-              iterations++;
-            } catch {
-              // Upscale failed (e.g., server OOM) - use best result so far
+            const result = await tryUpscaleWithFallback(sourceBlob);
+            if (!result) {
+              // All providers failed
               console.warn(
                 `Bulk upscale iteration ${iterations + 1} failed for ${imageData.fileName}, using best result so far (${currentWidth}×${currentHeight})`,
               );
               break;
             }
+
+            // Success - update our best result
+            sourceBlob = result.blob;
+            currentWidth *= result.scaleFactor;
+            currentHeight *= result.scaleFactor;
+            iterations++;
           }
 
           // Only resize with pica if we have enough dimensions (downscale only)
@@ -869,7 +928,7 @@ export function App() {
       // Clear progress when done
       setBulkUpscaleProgress(null);
     },
-    [upscaleClient, images],
+    [settings.upscaleProviders, tryUpscaleWithFallback, images],
   );
 
   const handleSettingsChange = useCallback((newSettings: Settings) => {
@@ -1592,7 +1651,9 @@ export function App() {
                 selectedImage={selectedImage}
                 onUpscaleConfirm={handleUpscaleConfirm}
                 onCropConfirm={handleCropConfirm}
+                upscaleProviders={settings.upscaleProviders}
                 upscaleServerUrl={settings.upscaleServerUrl}
+                stabilityApiKey={settings.stabilityApiKey}
                 hasPendingCrop={
                   pendingCrop !== null &&
                   pendingCrop.imageId === selectedImage?.id
