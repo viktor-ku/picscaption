@@ -1,4 +1,10 @@
-import { useState, useEffect, useRef, useTransition } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useTransition,
+  useLayoutEffect,
+} from "react";
 import { ImageIcon, Loader2, Check, X } from "lucide-react";
 import ReactCrop from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
@@ -26,6 +32,7 @@ interface ImagePreviewProps {
   stabilityApiKey?: string;
   hasPendingCrop?: boolean;
   onCancelCrop?: () => void;
+  onCropModeChange?: (isCropping: boolean) => void;
 }
 
 export function ImagePreview({
@@ -37,6 +44,7 @@ export function ImagePreview({
   stabilityApiKey,
   hasPendingCrop,
   onCancelCrop,
+  onCropModeChange,
 }: ImagePreviewProps) {
   const [fullImageReady, setFullImageReady] = useState(false);
   const [, startTransition] = useTransition();
@@ -80,6 +88,11 @@ export function ImagePreview({
     upscaleStateIsIdle: currentUpscaleData.state === "idle",
     onCropConfirm,
   });
+
+  // Notify parent of crop mode changes (synchronously to avoid race conditions with keyboard handlers)
+  useLayoutEffect(() => {
+    onCropModeChange?.(cropMode === "cropping");
+  }, [cropMode, onCropModeChange]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: selectedImageId needed for cache invalidation on image switch
   useEffect(() => {

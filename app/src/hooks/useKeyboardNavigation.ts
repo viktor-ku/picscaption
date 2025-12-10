@@ -4,6 +4,7 @@ import type { ImageData, PendingDeletion, PendingCrop } from "../types";
 interface UseKeyboardNavigationOptions {
   images: ImageData[];
   currentIndex: number;
+  isCropping: boolean;
   pendingCrop: PendingCrop | null;
   pendingDeletion: PendingDeletion | null;
   setSelectedImageId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -15,6 +16,7 @@ interface UseKeyboardNavigationOptions {
 export function useKeyboardNavigation({
   images,
   currentIndex,
+  isCropping,
   pendingCrop,
   pendingDeletion,
   setSelectedImageId,
@@ -76,6 +78,8 @@ export function useKeyboardNavigation({
           }
         }
       } else if (key === "enter") {
+        // Skip Enter handling when in crop mode (Enter applies the crop there)
+        if (isCropping) return;
         const captionField = document.getElementById("caption");
         if (captionField) {
           e.preventDefault();
@@ -92,6 +96,7 @@ export function useKeyboardNavigation({
   }, [
     images,
     currentIndex,
+    isCropping,
     handleDeleteImage,
     pendingCrop,
     pendingDeletion,

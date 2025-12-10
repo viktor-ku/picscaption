@@ -67,6 +67,7 @@ export function App() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>(null);
   const [pendingRestore, setPendingRestore] =
     useState<PendingRestoreData | null>(null);
+  const [isCropping, setIsCropping] = useState(false);
   const imagesRef = useRef<ImageData[]>(images);
 
   // File handling hook
@@ -148,6 +149,7 @@ export function App() {
   useKeyboardNavigation({
     images,
     currentIndex,
+    isCropping,
     pendingCrop,
     pendingDeletion,
     setSelectedImageId,
@@ -477,6 +479,7 @@ export function App() {
                   pendingCrop.imageId === selectedImage?.id
                 }
                 onCancelCrop={handleCancelCrop}
+                onCropModeChange={setIsCropping}
               />
             </div>
           </div>
