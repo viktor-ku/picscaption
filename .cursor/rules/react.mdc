@@ -1,0 +1,7 @@
+---
+applyAlways: false
+glob: *.tsx
+---
+
+Avoid settings state inside of `useEffect`
+

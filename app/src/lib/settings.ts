@@ -1,6 +1,5 @@
-// Settings storage using localStorage
-
-const SETTINGS_KEY = "picscaption-settings";
+// Settings types and constants
+// Storage is handled by atomWithStorage in store.ts
 
 export type UpscaleProvider = "ai3" | "stability";
 
@@ -30,51 +29,4 @@ export interface Settings {
   allowDeletions: boolean;
   profileName: string;
   profileEmail: string;
-}
-
-const DEFAULT_UPSCALE_PROVIDERS: UpscaleProviderConfig[] = [
-  { id: "ai3", enabled: true },
-  { id: "stability", enabled: false },
-];
-
-const DEFAULT_SETTINGS: Settings = {
-  upscaleProviders: DEFAULT_UPSCALE_PROVIDERS,
-  upscaleServerUrl: "",
-  stabilityApiKey: "",
-  allowDeletions: true,
-  profileName: "",
-  profileEmail: "",
-};
-
-export function getSettings(): Settings {
-  try {
-    const stored = localStorage.getItem(SETTINGS_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-
-      // Migration: convert old upscaleProvider to new upscaleProviders array
-      if (parsed.upscaleProvider && !parsed.upscaleProviders) {
-        const oldProvider = parsed.upscaleProvider as UpscaleProvider;
-        parsed.upscaleProviders = [
-          { id: oldProvider, enabled: true },
-          { id: oldProvider === "ai3" ? "stability" : "ai3", enabled: false },
-        ];
-        delete parsed.upscaleProvider;
-      }
-
-      // Merge with defaults to handle missing keys from older versions
-      return { ...DEFAULT_SETTINGS, ...parsed };
-    }
-  } catch (err) {
-    console.error("Failed to load settings:", err);
-  }
-  return { ...DEFAULT_SETTINGS };
-}
-
-export function saveSettings(settings: Settings): void {
-  try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  } catch (err) {
-    console.error("Failed to save settings:", err);
-  }
 }

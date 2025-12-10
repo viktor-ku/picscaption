@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from "react";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Toaster } from "react-hot-toast";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -16,10 +17,22 @@ import {
   type SettingsSection,
 } from "./index";
 import { ResizeHandle } from "./ResizeHandle";
-import type { ImageData, SaveStatus, PendingRestoreData } from "../types";
+import type { Settings } from "../lib/settings";
 import { deleteCaptions, clearAllData, makeKey } from "../lib/storage";
-import { getSettings, saveSettings, type Settings } from "../lib/settings";
 import { exportCaptions } from "../lib/export";
+import {
+  imagesAtom,
+  selectedImageIdAtom,
+  currentDirectoryAtom,
+  errorMessageAtom,
+  saveStatusAtom,
+  settingsAtom,
+  pendingRestoreAtom,
+  isCroppingAtom,
+  currentIndexAtom,
+  selectedImageAtom,
+  captionedCountAtom,
+} from "../lib/store";
 import {
   useImagePreloading,
   useAutoSave,
@@ -32,10 +45,22 @@ import {
 } from "../hooks";
 
 export function App() {
-  const [images, setImages] = useState<ImageData[]>([]);
-  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
-  const [currentDirectory, setCurrentDirectory] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Global state from atoms
+  const [images, setImages] = useAtom(imagesAtom);
+  const [selectedImageId, setSelectedImageId] = useAtom(selectedImageIdAtom);
+  const [currentDirectory, setCurrentDirectory] = useAtom(currentDirectoryAtom);
+  const [errorMessage, setErrorMessage] = useAtom(errorMessageAtom);
+  const [saveStatus, setSaveStatus] = useAtom(saveStatusAtom);
+  const [settings, setSettings] = useAtom(settingsAtom);
+  const [pendingRestore, setPendingRestore] = useAtom(pendingRestoreAtom);
+  const setIsCropping = useSetAtom(isCroppingAtom);
+
+  // Derived atoms (read-only)
+  const currentIndex = useAtomValue(currentIndexAtom);
+  const selectedImage = useAtomValue(selectedImageAtom);
+  const captionedCount = useAtomValue(captionedCountAtom);
+
+  // Local UI state (not shared)
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isBulkUpscaleOpen, setIsBulkUpscaleOpen] = useState(false);
@@ -47,28 +72,8 @@ export function App() {
       return s === "general" || s === "upscale" || s === "profile" ? s : null;
     });
   const isSettingsOpen = settingsSection !== null;
-  const [settings, setSettings] = useState<Settings>(() => {
-    if (typeof window === "undefined") {
-      return {
-        upscaleProviders: [
-          { id: "ai3" as const, enabled: true },
-          { id: "stability" as const, enabled: false },
-        ],
-        upscaleServerUrl: "",
-        stabilityApiKey: "",
-        allowDeletions: true,
-        profileName: "",
-        profileEmail: "",
-      };
-    }
-    return getSettings();
-  });
 
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>(null);
-  const [pendingRestore, setPendingRestore] =
-    useState<PendingRestoreData | null>(null);
-  const [isCropping, setIsCropping] = useState(false);
-  const imagesRef = useRef<ImageData[]>(images);
+  const imagesRef = useRef(images);
 
   // File handling hook
   const {
@@ -110,16 +115,8 @@ export function App() {
     MAX_PANE_PERCENT,
   } = usePaneResize();
 
-  const currentIndex = images.findIndex((img) => img.id === selectedImageId);
-  const selectedImage = currentIndex >= 0 ? images[currentIndex] : null;
-
   // Image deletion hook
-  const {
-    pendingDeletion,
-    setPendingDeletion,
-    handleDeleteImage,
-    handleUndoDelete,
-  } = useImageDeletion({
+  const { handleDeleteImage, handleUndoDelete } = useImageDeletion({
     images,
     selectedImageId,
     currentDirectory,
@@ -130,29 +127,17 @@ export function App() {
   });
 
   // Crop undo hook
-  const {
-    pendingCrop,
-    setPendingCrop,
-    handleUndoCrop,
-    handleCancelCrop,
-    handleCropConfirm,
-  } = useCropUndo({
-    images,
-    directoryHandleRef,
-    setImages,
-  });
+  const { pendingCrop, handleUndoCrop, handleCancelCrop, handleCropConfirm } =
+    useCropUndo({
+      images,
+      directoryHandleRef,
+      setImages,
+    });
 
   // Other hooks
   useImagePreloading(images, selectedImageId, setImages);
   useAutoSave(images, currentDirectory, setSaveStatus, setErrorMessage);
-
   useKeyboardNavigation({
-    images,
-    currentIndex,
-    isCropping,
-    pendingCrop,
-    pendingDeletion,
-    setSelectedImageId,
     handleDeleteImage,
     handleUndoCrop,
     handleUndoDelete,
@@ -212,7 +197,7 @@ export function App() {
     }
     finalizeImages(newImages, directory);
     setPendingRestore(null);
-  }, [pendingRestore, finalizeImages]);
+  }, [pendingRestore, finalizeImages, setPendingRestore]);
 
   const handleDiscardHistory = useCallback(async () => {
     if (!pendingRestore) return;
@@ -227,29 +212,34 @@ export function App() {
     }
     finalizeImages(newImages, directory);
     setPendingRestore(null);
-  }, [pendingRestore, finalizeImages]);
+  }, [pendingRestore, finalizeImages, setPendingRestore]);
 
   const handleCaptionChange = useCallback(
     (caption: string) => {
       if (!selectedImageId) return;
-      setImages((prev) =>
-        prev.map((img) =>
-          img.id === selectedImageId ? { ...img, caption } : img,
-        ),
-      );
+      setImages((draft) => {
+        const img = draft.find((i) => i.id === selectedImageId);
+        if (img) img.caption = caption;
+      });
     },
-    [selectedImageId],
+    [selectedImageId, setImages],
   );
 
-  const handleSelectImage = useCallback((id: string) => {
-    setSelectedImageId(id);
-  }, []);
+  const handleSelectImage = useCallback(
+    (id: string) => {
+      setSelectedImageId(id);
+    },
+    [setSelectedImageId],
+  );
 
   const handleRemoveBrokenImage = useCallback(
     async (id: string) => {
       const img = images.find((i) => i.id === id);
       if (!img) return;
-      setImages((prev) => prev.filter((i) => i.id !== id));
+      setImages((draft) => {
+        const idx = draft.findIndex((i) => i.id === id);
+        if (idx !== -1) draft.splice(idx, 1);
+      });
       if (selectedImageId === id) {
         const r = images.filter((i) => i.id !== id);
         setSelectedImageId(r.length > 0 ? r[0].id : null);
@@ -264,7 +254,7 @@ export function App() {
       if (img.thumbnailUrl) URL.revokeObjectURL(img.thumbnailUrl);
       if (img.fullImageUrl) URL.revokeObjectURL(img.fullImageUrl);
     },
-    [images, selectedImageId, currentDirectory],
+    [images, selectedImageId, currentDirectory, setImages, setSelectedImageId],
   );
 
   const handleExport = useCallback(
@@ -273,14 +263,24 @@ export function App() {
     [images, directoryHandleRef],
   );
 
-  const handleBulkOverwrite = useCallback((caption: string) => {
-    setImages((prev) => prev.map((img) => ({ ...img, caption })));
-  }, []);
+  const handleBulkOverwrite = useCallback(
+    (caption: string) => {
+      setImages((draft) => {
+        for (const img of draft) {
+          img.caption = caption;
+        }
+      });
+    },
+    [setImages],
+  );
 
-  const handleSettingsChange = useCallback((newSettings: Settings) => {
-    setSettings(newSettings);
-    saveSettings(newSettings);
-  }, []);
+  const handleSettingsChange = useCallback(
+    (newSettings: Settings) => {
+      // atomWithStorage automatically syncs to localStorage
+      setSettings(newSettings);
+    },
+    [setSettings],
+  );
 
   const handleDeleteAllData = useCallback(async () => {
     try {
@@ -290,21 +290,28 @@ export function App() {
         if (img.thumbnailUrl) URL.revokeObjectURL(img.thumbnailUrl);
         if (img.fullImageUrl) URL.revokeObjectURL(img.fullImageUrl);
       }
+      // Reset all atoms
       setImages([]);
       setSelectedImageId(null);
       setCurrentDirectory(null);
       setErrorMessage(null);
       setSaveStatus(null);
       setPendingRestore(null);
-      setPendingDeletion(null);
-      setPendingCrop(null);
-      setSettings(getSettings());
       directoryHandleRef.current = null;
       setIsDeleteAllDataOpen(false);
     } catch {
       setErrorMessage("Failed to delete all data");
     }
-  }, [images, setPendingDeletion, setPendingCrop, directoryHandleRef]);
+  }, [
+    images,
+    setImages,
+    setSelectedImageId,
+    setCurrentDirectory,
+    setErrorMessage,
+    setSaveStatus,
+    setPendingRestore,
+    directoryHandleRef,
+  ]);
 
   const handleUpscaleConfirm = useCallback(
     async (
@@ -320,19 +327,15 @@ export function App() {
       });
       const newUrl = URL.createObjectURL(newFile);
       if (img.fullImageUrl) URL.revokeObjectURL(img.fullImageUrl);
-      setImages((prev) =>
-        prev.map((i) =>
-          i.id === imageId
-            ? {
-                ...i,
-                file: newFile,
-                fullImageUrl: newUrl,
-                width: newWidth,
-                height: newHeight,
-              }
-            : i,
-        ),
-      );
+      setImages((draft) => {
+        const target = draft.find((i) => i.id === imageId);
+        if (target) {
+          target.file = newFile;
+          target.fullImageUrl = newUrl;
+          target.width = newWidth;
+          target.height = newHeight;
+        }
+      });
       if (directoryHandleRef.current) {
         try {
           const fh = await directoryHandleRef.current.getFileHandle(
@@ -347,7 +350,7 @@ export function App() {
         }
       }
     },
-    [images, directoryHandleRef],
+    [images, directoryHandleRef, setImages],
   );
 
   return (
@@ -369,9 +372,7 @@ export function App() {
 
       <Header
         imageCount={images.length}
-        captionedCount={
-          images.filter((img) => img.caption.trim() !== "").length
-        }
+        captionedCount={captionedCount}
         saveStatus={saveStatus}
         onExport={handleExport}
         onShowSettings={() => setSettingsSection("general")}

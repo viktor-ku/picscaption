@@ -11,7 +11,7 @@ const PRELOAD_WINDOW = 1;
 export function useImagePreloading(
   images: ImageData[],
   selectedImageId: string | null,
-  setImages: React.Dispatch<React.SetStateAction<ImageData[]>>,
+  setImages: (fn: (draft: ImageData[]) => void) => void,
 ) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: Intentionally minimal deps to avoid infinite loops - accesses images/setImages through closure
   useEffect(() => {
@@ -33,7 +33,8 @@ export function useImagePreloading(
     }
 
     // Determine which images need loading and which need unloading
-    const updates: { id: string; fullImageUrl: string | null }[] = [];
+    const toLoad: { id: string; fullImageUrl: string }[] = [];
+    const toUnload: { id: string; oldUrl: string }[] = [];
     const imagesToLoadDimensions: { id: string; url: string }[] = [];
 
     images.forEach((img, idx) => {
@@ -43,26 +44,34 @@ export function useImagePreloading(
       if (shouldBeLoaded && !isLoaded) {
         // Load this image
         const fullImageUrl = loadFullImage(img.file);
-        updates.push({ id: img.id, fullImageUrl });
+        toLoad.push({ id: img.id, fullImageUrl });
         // Also load dimensions if not yet known
         if (img.width === undefined || img.height === undefined) {
           imagesToLoadDimensions.push({ id: img.id, url: fullImageUrl });
         }
       } else if (!shouldBeLoaded && isLoaded && img.fullImageUrl) {
         // Unload this image - revokes blob URL to free memory
-        unloadFullImage(img.fullImageUrl);
-        updates.push({ id: img.id, fullImageUrl: null });
+        toUnload.push({ id: img.id, oldUrl: img.fullImageUrl });
       }
     });
 
     // Apply URL updates if any
-    if (updates.length > 0) {
-      setImages((prev) =>
-        prev.map((img) => {
-          const update = updates.find((u) => u.id === img.id);
-          return update ? { ...img, fullImageUrl: update.fullImageUrl } : img;
-        }),
-      );
+    if (toLoad.length > 0 || toUnload.length > 0) {
+      // Revoke old URLs
+      for (const { oldUrl } of toUnload) {
+        unloadFullImage(oldUrl);
+      }
+
+      setImages((draft) => {
+        for (const { id, fullImageUrl } of toLoad) {
+          const img = draft.find((i) => i.id === id);
+          if (img) img.fullImageUrl = fullImageUrl;
+        }
+        for (const { id } of toUnload) {
+          const img = draft.find((i) => i.id === id);
+          if (img) img.fullImageUrl = null;
+        }
+      });
     }
 
     // Load dimensions asynchronously for newly loaded images
@@ -72,17 +81,13 @@ export function useImagePreloading(
       imgElement.onload = () => {
         // Skip if effect was cleaned up (user switched away)
         if (cancelled) return;
-        setImages((prev) =>
-          prev.map((item) =>
-            item.id === id
-              ? {
-                  ...item,
-                  width: imgElement.naturalWidth,
-                  height: imgElement.naturalHeight,
-                }
-              : item,
-          ),
-        );
+        setImages((draft) => {
+          const item = draft.find((i) => i.id === id);
+          if (item) {
+            item.width = imgElement.naturalWidth;
+            item.height = imgElement.naturalHeight;
+          }
+        });
       };
       imgElement.src = url;
     }

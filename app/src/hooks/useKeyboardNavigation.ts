@@ -1,25 +1,22 @@
 import { useEffect } from "react";
-import type { ImageData, PendingDeletion, PendingCrop } from "../types";
+import type { PendingDeletion, PendingCrop } from "../types";
+import {
+  store,
+  imagesAtom,
+  currentIndexAtom,
+  isCroppingAtom,
+  pendingCropAtom,
+  pendingDeletionAtom,
+  selectedImageIdAtom,
+} from "../lib/store";
 
 interface UseKeyboardNavigationOptions {
-  images: ImageData[];
-  currentIndex: number;
-  isCropping: boolean;
-  pendingCrop: PendingCrop | null;
-  pendingDeletion: PendingDeletion | null;
-  setSelectedImageId: React.Dispatch<React.SetStateAction<string | null>>;
   handleDeleteImage: () => void;
   handleUndoCrop: (pending: PendingCrop) => void;
   handleUndoDelete: (pending: PendingDeletion) => void;
 }
 
 export function useKeyboardNavigation({
-  images,
-  currentIndex,
-  isCropping,
-  pendingCrop,
-  pendingDeletion,
-  setSelectedImageId,
   handleDeleteImage,
   handleUndoCrop,
   handleUndoDelete,
@@ -31,6 +28,13 @@ export function useKeyboardNavigation({
         target.tagName === "INPUT" || target.tagName === "TEXTAREA";
       const key = e.key.toLowerCase();
       const isCtrl = e.ctrlKey || e.metaKey;
+
+      // Read current state directly from store (always up-to-date)
+      const pendingCrop = store.get(pendingCropAtom);
+      const pendingDeletion = store.get(pendingDeletionAtom);
+      const isCropping = store.get(isCroppingAtom);
+      const images = store.get(imagesAtom);
+      const currentIndex = store.get(currentIndexAtom);
 
       if (key === "z" && isCtrl) {
         if (pendingCrop) {
@@ -55,26 +59,26 @@ export function useKeyboardNavigation({
         if (isShift) {
           for (let i = currentIndex - 1; i >= 0; i--) {
             if (images[i].caption.trim() === "") {
-              setSelectedImageId(images[i].id);
+              store.set(selectedImageIdAtom, images[i].id);
               break;
             }
           }
         } else {
           if (currentIndex > 0) {
-            setSelectedImageId(images[currentIndex - 1].id);
+            store.set(selectedImageIdAtom, images[currentIndex - 1].id);
           }
         }
       } else if (key === "l") {
         if (isShift) {
           for (let i = currentIndex + 1; i < images.length; i++) {
             if (images[i].caption.trim() === "") {
-              setSelectedImageId(images[i].id);
+              store.set(selectedImageIdAtom, images[i].id);
               break;
             }
           }
         } else {
           if (currentIndex < images.length - 1) {
-            setSelectedImageId(images[currentIndex + 1].id);
+            store.set(selectedImageIdAtom, images[currentIndex + 1].id);
           }
         }
       } else if (key === "enter") {
@@ -93,15 +97,5 @@ export function useKeyboardNavigation({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    images,
-    currentIndex,
-    isCropping,
-    handleDeleteImage,
-    pendingCrop,
-    pendingDeletion,
-    handleUndoCrop,
-    handleUndoDelete,
-    setSelectedImageId,
-  ]);
+  }, [handleDeleteImage, handleUndoCrop, handleUndoDelete]);
 }

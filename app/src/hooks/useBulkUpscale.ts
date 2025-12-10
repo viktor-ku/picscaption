@@ -9,7 +9,7 @@ interface UseBulkUpscaleOptions {
   images: ImageData[];
   settings: Settings;
   directoryHandleRef: React.RefObject<FileSystemDirectoryHandle | null>;
-  setImages: React.Dispatch<React.SetStateAction<ImageData[]>>;
+  setImages: (fn: (draft: ImageData[]) => void) => void;
 }
 
 export function useBulkUpscale({
@@ -117,19 +117,15 @@ export function useBulkUpscale({
           if (imageData.fullImageUrl)
             URL.revokeObjectURL(imageData.fullImageUrl);
 
-          setImages((prev) =>
-            prev.map((img) =>
-              img.id === imageData.id
-                ? {
-                    ...img,
-                    file: newFile,
-                    fullImageUrl: newFullImageUrl,
-                    width: finalWidth,
-                    height: finalHeight,
-                  }
-                : img,
-            ),
-          );
+          setImages((draft) => {
+            const img = draft.find((item) => item.id === imageData.id);
+            if (img) {
+              img.file = newFile;
+              img.fullImageUrl = newFullImageUrl;
+              img.width = finalWidth;
+              img.height = finalHeight;
+            }
+          });
 
           if (directoryHandleRef.current) {
             try {

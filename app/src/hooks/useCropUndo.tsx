@@ -1,12 +1,14 @@
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
+import { useAtom } from "jotai";
 import toast from "react-hot-toast";
 import type { ImageData, PendingCrop } from "../types";
 import { CropToast } from "../components/UndoToast";
+import { pendingCropAtom } from "../lib/store";
 
 interface UseCropUndoOptions {
   images: ImageData[];
   directoryHandleRef: React.RefObject<FileSystemDirectoryHandle | null>;
-  setImages: React.Dispatch<React.SetStateAction<ImageData[]>>;
+  setImages: (fn: (draft: ImageData[]) => void) => void;
 }
 
 export function useCropUndo({
@@ -14,7 +16,7 @@ export function useCropUndo({
   directoryHandleRef,
   setImages,
 }: UseCropUndoOptions) {
-  const [pendingCrop, setPendingCrop] = useState<PendingCrop | null>(null);
+  const [pendingCrop, setPendingCrop] = useAtom(pendingCropAtom);
 
   const handleUndoCrop = useCallback(
     async (pending: PendingCrop) => {
@@ -37,19 +39,15 @@ export function useCropUndo({
         URL.revokeObjectURL(imageToRestore.fullImageUrl);
       }
 
-      setImages((prev) =>
-        prev.map((img) =>
-          img.id === pending.imageId
-            ? {
-                ...img,
-                file: restoredFile,
-                fullImageUrl: restoredFullImageUrl,
-                width: pending.originalWidth,
-                height: pending.originalHeight,
-              }
-            : img,
-        ),
-      );
+      setImages((draft) => {
+        const img = draft.find((i) => i.id === pending.imageId);
+        if (img) {
+          img.file = restoredFile;
+          img.fullImageUrl = restoredFullImageUrl;
+          img.width = pending.originalWidth;
+          img.height = pending.originalHeight;
+        }
+      });
 
       if (directoryHandleRef.current) {
         try {
@@ -67,7 +65,7 @@ export function useCropUndo({
 
       setPendingCrop(null);
     },
-    [images, directoryHandleRef, setImages],
+    [images, directoryHandleRef, setImages, setPendingCrop],
   );
 
   const handleCancelCrop = useCallback(() => {
@@ -105,19 +103,15 @@ export function useCropUndo({
         URL.revokeObjectURL(imageToUpdate.fullImageUrl);
       }
 
-      setImages((prev) =>
-        prev.map((img) =>
-          img.id === imageId
-            ? {
-                ...img,
-                file: newFile,
-                fullImageUrl: newFullImageUrl,
-                width: newWidth,
-                height: newHeight,
-              }
-            : img,
-        ),
-      );
+      setImages((draft) => {
+        const img = draft.find((i) => i.id === imageId);
+        if (img) {
+          img.file = newFile;
+          img.fullImageUrl = newFullImageUrl;
+          img.width = newWidth;
+          img.height = newHeight;
+        }
+      });
 
       if (directoryHandleRef.current) {
         try {
@@ -167,7 +161,14 @@ export function useCropUndo({
         });
       }, 5000);
     },
-    [images, pendingCrop, handleUndoCrop, directoryHandleRef, setImages],
+    [
+      images,
+      pendingCrop,
+      handleUndoCrop,
+      directoryHandleRef,
+      setImages,
+      setPendingCrop,
+    ],
   );
 
   return {

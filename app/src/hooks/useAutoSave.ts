@@ -10,8 +10,8 @@ const SAVE_DEBOUNCE_MS = 1000;
 export function useAutoSave(
   images: ImageData[],
   currentDirectory: string | null,
-  setSaveStatus: React.Dispatch<React.SetStateAction<SaveStatus>>,
-  setErrorMessage: React.Dispatch<React.SetStateAction<string | null>>,
+  setSaveStatus: (status: SaveStatus) => void,
+  setErrorMessage: (msg: string | null) => void,
 ) {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

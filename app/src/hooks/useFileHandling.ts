@@ -14,13 +14,11 @@ import {
 
 interface UseFileHandlingOptions {
   images: ImageData[];
-  setImages: React.Dispatch<React.SetStateAction<ImageData[]>>;
-  setSelectedImageId: React.Dispatch<React.SetStateAction<string | null>>;
-  setCurrentDirectory: React.Dispatch<React.SetStateAction<string | null>>;
-  setErrorMessage: React.Dispatch<React.SetStateAction<string | null>>;
-  setPendingRestore: React.Dispatch<
-    React.SetStateAction<PendingRestoreData | null>
-  >;
+  setImages: (fn: ImageData[] | ((draft: ImageData[]) => void)) => void;
+  setSelectedImageId: (id: string | null) => void;
+  setCurrentDirectory: (dir: string | null) => void;
+  setErrorMessage: (msg: string | null) => void;
+  setPendingRestore: (data: PendingRestoreData | null) => void;
 }
 
 export function useFileHandling({
@@ -37,9 +35,33 @@ export function useFileHandling({
   const finalizeImages = useCallback(
     (newImages: ImageData[], directoryName: string) => {
       setCurrentDirectory(directoryName);
+      // Direct set with new array
       setImages(newImages);
       setSelectedImageId(newImages[0]?.id ?? null);
       setErrorMessage(null);
+
+      // Batch thumbnail updates to reduce state updates
+      // Use object to hold mutable state that persists across callbacks
+      const batch: {
+        pending: Map<string, string>;
+        timeout: ReturnType<typeof setTimeout> | null;
+      } = {
+        pending: new Map(),
+        timeout: null,
+      };
+
+      const flushThumbnails = () => {
+        batch.timeout = null;
+        if (batch.pending.size === 0) return;
+        const updates = batch.pending;
+        batch.pending = new Map();
+        setImages((draft) => {
+          for (const [imageId, thumbnailUrl] of updates) {
+            const item = draft.find((i) => i.id === imageId);
+            if (item) item.thumbnailUrl = thumbnailUrl;
+          }
+        });
+      };
 
       const files = newImages.map((img) => img.file);
       generateThumbnailsBatch(
@@ -47,11 +69,10 @@ export function useFileHandling({
         (index, thumbnailUrl) => {
           const imageId = newImages[index]?.id;
           if (!imageId) return;
-          setImages((prev) =>
-            prev.map((item) =>
-              item.id === imageId ? { ...item, thumbnailUrl } : item,
-            ),
-          );
+          batch.pending.set(imageId, thumbnailUrl);
+          // Debounce flush - coalesces rapid updates into single state update
+          if (batch.timeout) clearTimeout(batch.timeout);
+          batch.timeout = setTimeout(flushThumbnails, 0);
         },
         (index, error) => {
           console.error(

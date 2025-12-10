@@ -1,8 +1,10 @@
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
+import { useAtom } from "jotai";
 import toast from "react-hot-toast";
 import type { ImageData, PendingDeletion } from "../types";
 import { deleteCaptions, makeKey } from "../lib/storage";
 import { DeleteToast } from "../components/UndoToast";
+import { pendingDeletionAtom } from "../lib/store";
 
 interface UseImageDeletionOptions {
   images: ImageData[];
@@ -10,8 +12,8 @@ interface UseImageDeletionOptions {
   currentDirectory: string | null;
   allowDeletions: boolean;
   directoryHandleRef: React.RefObject<FileSystemDirectoryHandle | null>;
-  setImages: React.Dispatch<React.SetStateAction<ImageData[]>>;
-  setSelectedImageId: React.Dispatch<React.SetStateAction<string | null>>;
+  setImages: (fn: (draft: ImageData[]) => void) => void;
+  setSelectedImageId: (id: string | null) => void;
 }
 
 export function useImageDeletion({
@@ -23,8 +25,7 @@ export function useImageDeletion({
   setImages,
   setSelectedImageId,
 }: UseImageDeletionOptions) {
-  const [pendingDeletion, setPendingDeletion] =
-    useState<PendingDeletion | null>(null);
+  const [pendingDeletion, setPendingDeletion] = useAtom(pendingDeletionAtom);
 
   const handleFinalizeDelete = useCallback(
     async (pending: PendingDeletion) => {
@@ -61,15 +62,13 @@ export function useImageDeletion({
           console.error("Failed to restore file to disk:", err);
         }
       }
-      setImages((prev) => {
-        const newImages = [...prev];
-        newImages.splice(pending.originalIndex, 0, pending.image);
-        return newImages;
+      setImages((draft) => {
+        draft.splice(pending.originalIndex, 0, pending.image);
       });
       setSelectedImageId(pending.image.id);
       setPendingDeletion(null);
     },
-    [directoryHandleRef, setImages, setSelectedImageId],
+    [directoryHandleRef, setImages, setSelectedImageId, setPendingDeletion],
   );
 
   const handleDeleteImage = useCallback(async () => {
@@ -95,7 +94,10 @@ export function useImageDeletion({
       }
     }
 
-    setImages((prev) => prev.filter((img) => img.id !== selectedImageId));
+    setImages((draft) => {
+      const idx = draft.findIndex((img) => img.id === selectedImageId);
+      if (idx !== -1) draft.splice(idx, 1);
+    });
 
     if (images.length > 1) {
       const nextIndex =
@@ -155,6 +157,7 @@ export function useImageDeletion({
     directoryHandleRef,
     setImages,
     setSelectedImageId,
+    setPendingDeletion,
   ]);
 
   return {

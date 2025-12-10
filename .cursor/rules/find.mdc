@@ -1,0 +1,5 @@
+---
+applyAlways: true
+---
+
+Avoid using `.find()`. Prefer to use `.findIndex()` with subsequent retrieval of the value by an index.
