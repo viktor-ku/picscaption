@@ -78,7 +78,7 @@ export function BulkUpscaleModal({
             </DialogTitle>
             <button
               type="button"
-              onClick={handleClose}
+              onMouseDownCapture={handleClose}
               className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -127,14 +127,14 @@ export function BulkUpscaleModal({
           <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200">
             <button
               type="button"
-              onClick={handleClose}
+              onMouseDownCapture={handleClose}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={handleStart}
+              onMouseDownCapture={handleStart}
               disabled={!isValid}
               className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-hover transition-colors cursor-pointer disabled:bg-gray-300 disabled:cursor-not-allowed"
             >

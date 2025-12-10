@@ -218,8 +218,8 @@ export function App() {
     (caption: string) => {
       if (!selectedImageId) return;
       setImages((draft) => {
-        const img = draft.find((i) => i.id === selectedImageId);
-        if (img) img.caption = caption;
+        const idx = draft.findIndex((i) => i.id === selectedImageId);
+        if (idx !== -1) draft[idx].caption = caption;
       });
     },
     [selectedImageId, setImages],
@@ -234,8 +234,9 @@ export function App() {
 
   const handleRemoveBrokenImage = useCallback(
     async (id: string) => {
-      const img = images.find((i) => i.id === id);
-      if (!img) return;
+      const imgIdx = images.findIndex((i) => i.id === id);
+      if (imgIdx === -1) return;
+      const img = images[imgIdx];
       setImages((draft) => {
         const idx = draft.findIndex((i) => i.id === id);
         if (idx !== -1) draft.splice(idx, 1);
@@ -320,20 +321,21 @@ export function App() {
       newWidth: number,
       newHeight: number,
     ) => {
-      const img = images.find((i) => i.id === imageId);
-      if (!img) return;
+      const imgIdx = images.findIndex((i) => i.id === imageId);
+      if (imgIdx === -1) return;
+      const img = images[imgIdx];
       const newFile = new File([newBlob], img.fileName, {
         type: newBlob.type || "image/png",
       });
       const newUrl = URL.createObjectURL(newFile);
       if (img.fullImageUrl) URL.revokeObjectURL(img.fullImageUrl);
       setImages((draft) => {
-        const target = draft.find((i) => i.id === imageId);
-        if (target) {
-          target.file = newFile;
-          target.fullImageUrl = newUrl;
-          target.width = newWidth;
-          target.height = newHeight;
+        const targetIdx = draft.findIndex((i) => i.id === imageId);
+        if (targetIdx !== -1) {
+          draft[targetIdx].file = newFile;
+          draft[targetIdx].fullImageUrl = newUrl;
+          draft[targetIdx].width = newWidth;
+          draft[targetIdx].height = newHeight;
         }
       });
       if (directoryHandleRef.current) {

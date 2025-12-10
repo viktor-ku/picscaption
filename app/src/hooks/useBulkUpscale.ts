@@ -118,12 +118,12 @@ export function useBulkUpscale({
             URL.revokeObjectURL(imageData.fullImageUrl);
 
           setImages((draft) => {
-            const img = draft.find((item) => item.id === imageData.id);
-            if (img) {
-              img.file = newFile;
-              img.fullImageUrl = newFullImageUrl;
-              img.width = finalWidth;
-              img.height = finalHeight;
+            const idx = draft.findIndex((item) => item.id === imageData.id);
+            if (idx !== -1) {
+              draft[idx].file = newFile;
+              draft[idx].fullImageUrl = newFullImageUrl;
+              draft[idx].width = finalWidth;
+              draft[idx].height = finalHeight;
             }
           });
 

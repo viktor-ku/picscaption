@@ -107,8 +107,12 @@ export function useImageDeletion({
       if (nextImage && nextImage.id !== selectedImageId) {
         setSelectedImageId(nextImage.id);
       } else if (images.length > 1) {
-        const otherImage = images.find((img) => img.id !== selectedImageId);
-        setSelectedImageId(otherImage?.id ?? null);
+        const otherImageIdx = images.findIndex(
+          (img) => img.id !== selectedImageId,
+        );
+        setSelectedImageId(
+          otherImageIdx !== -1 ? images[otherImageIdx].id : null,
+        );
       }
     } else {
       setSelectedImageId(null);

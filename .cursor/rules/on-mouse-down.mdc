@@ -2,4 +2,4 @@
 applyAlways: true
 ---
 
-Always prefer `onKeyDownCapture` event instead of `onClick` as it provides much better user experience.
+Always prefer `onMouseDownCapture` event instead of `onClick` as it provides much better user experience.

@@ -44,7 +44,7 @@ export function KeybindingsModal({ isOpen, onClose }: KeybindingsModalProps) {
             </DialogTitle>
             <button
               type="button"
-              onClick={onClose}
+              onMouseDownCapture={onClose}
               className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />

@@ -37,7 +37,8 @@ export function useImagePreloading(
     const toUnload: { id: string; oldUrl: string }[] = [];
     const imagesToLoadDimensions: { id: string; url: string }[] = [];
 
-    images.forEach((img, idx) => {
+    for (let idx = 0; idx < images.length; idx++) {
+      const img = images[idx];
       const shouldBeLoaded = indicesInWindow.has(idx);
       const isLoaded = img.fullImageUrl !== null;
 
@@ -53,7 +54,7 @@ export function useImagePreloading(
         // Unload this image - revokes blob URL to free memory
         toUnload.push({ id: img.id, oldUrl: img.fullImageUrl });
       }
-    });
+    }
 
     // Apply URL updates if any
     if (toLoad.length > 0 || toUnload.length > 0) {
@@ -64,12 +65,12 @@ export function useImagePreloading(
 
       setImages((draft) => {
         for (const { id, fullImageUrl } of toLoad) {
-          const img = draft.find((i) => i.id === id);
-          if (img) img.fullImageUrl = fullImageUrl;
+          const idx = draft.findIndex((i) => i.id === id);
+          if (idx !== -1) draft[idx].fullImageUrl = fullImageUrl;
         }
         for (const { id } of toUnload) {
-          const img = draft.find((i) => i.id === id);
-          if (img) img.fullImageUrl = null;
+          const idx = draft.findIndex((i) => i.id === id);
+          if (idx !== -1) draft[idx].fullImageUrl = null;
         }
       });
     }
@@ -82,10 +83,10 @@ export function useImagePreloading(
         // Skip if effect was cleaned up (user switched away)
         if (cancelled) return;
         setImages((draft) => {
-          const item = draft.find((i) => i.id === id);
-          if (item) {
-            item.width = imgElement.naturalWidth;
-            item.height = imgElement.naturalHeight;
+          const idx = draft.findIndex((i) => i.id === id);
+          if (idx !== -1) {
+            draft[idx].width = imgElement.naturalWidth;
+            draft[idx].height = imgElement.naturalHeight;
           }
         });
       };

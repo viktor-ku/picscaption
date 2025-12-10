@@ -37,7 +37,7 @@ export function DeleteAllDataModal({
             </DialogTitle>
             <button
               type="button"
-              onClick={onClose}
+              onMouseDownCapture={onClose}
               className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -70,14 +70,14 @@ export function DeleteAllDataModal({
           <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200">
             <button
               type="button"
-              onClick={onClose}
+              onMouseDownCapture={onClose}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={onConfirm}
+              onMouseDownCapture={onConfirm}
               className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors cursor-pointer"
             >
               Delete All Data

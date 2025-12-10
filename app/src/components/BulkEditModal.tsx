@@ -53,7 +53,7 @@ export function BulkEditModal({
             </DialogTitle>
             <button
               type="button"
-              onClick={handleClose}
+              onMouseDownCapture={handleClose}
               className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -98,14 +98,14 @@ export function BulkEditModal({
           <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200">
             <button
               type="button"
-              onClick={handleClose}
+              onMouseDownCapture={handleClose}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={handleOverwrite}
+              onMouseDownCapture={handleOverwrite}
               className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-colors cursor-pointer"
             >
               Overwrite {imageCount} caption{imageCount !== 1 ? "s" : ""}

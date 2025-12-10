@@ -57,8 +57,8 @@ export function useFileHandling({
         batch.pending = new Map();
         setImages((draft) => {
           for (const [imageId, thumbnailUrl] of updates) {
-            const item = draft.find((i) => i.id === imageId);
-            if (item) item.thumbnailUrl = thumbnailUrl;
+            const idx = draft.findIndex((i) => i.id === imageId);
+            if (idx !== -1) draft[idx].thumbnailUrl = thumbnailUrl;
           }
         });
       };
@@ -183,7 +183,11 @@ export function useFileHandling({
       directoryHandleRef.current = dirHandle;
 
       type FileWithPath = File & { path?: string };
-      const firstFileWithPath = files.find((f) => (f as FileWithPath).path);
+      const firstFileWithPathIdx = files.findIndex(
+        (f) => (f as FileWithPath).path,
+      );
+      const firstFileWithPath =
+        firstFileWithPathIdx !== -1 ? files[firstFileWithPathIdx] : undefined;
       let directoryPath = dirHandle.name;
       if (firstFileWithPath) {
         const fullPath = (firstFileWithPath as FileWithPath).path;

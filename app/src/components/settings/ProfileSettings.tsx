@@ -81,7 +81,7 @@ export function ProfileSettings({
           </div>
           <button
             type="button"
-            onClick={onDeleteAllData}
+            onMouseDownCapture={onDeleteAllData}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors cursor-pointer"
           >
             <Trash2 className="w-4 h-4" />
@@ -99,7 +99,7 @@ export function ProfileSettings({
           </div>
           <button
             type="button"
-            onClick={handleDeleteAccount}
+            onMouseDownCapture={handleDeleteAccount}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors cursor-pointer"
           >
             <UserX className="w-4 h-4" />

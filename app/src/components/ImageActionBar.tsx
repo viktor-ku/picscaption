@@ -64,7 +64,7 @@ export function ImageActionBar({
                   <button
                     key={scale}
                     type="button"
-                    onClick={() => onUpscale(scale)}
+                    onMouseDownCapture={() => onUpscale(scale)}
                     disabled={!canUpscale}
                     className={`
                       px-2.5 py-1 rounded-md text-xs font-semibold
@@ -85,7 +85,7 @@ export function ImageActionBar({
                   <>
                     <PopoverButton
                       disabled={upscaleState !== "idle"}
-                      onClick={() => {
+                      onMouseDownCapture={() => {
                         setTimeout(() => widthInputRef.current?.focus(), 0);
                       }}
                       className={`
@@ -214,7 +214,7 @@ export function ImageActionBar({
         {hasPendingCrop ? (
           <button
             type="button"
-            onClick={onCancelCrop}
+            onMouseDownCapture={onCancelCrop}
             className="px-2.5 py-1 rounded-md text-xs font-semibold bg-white/15 hover:bg-white/25 text-white cursor-pointer transition-all"
           >
             Cancel
@@ -223,7 +223,7 @@ export function ImageActionBar({
           <div className="flex gap-1.5 ml-1">
             <button
               type="button"
-              onClick={() => onStartCrop(1)}
+              onMouseDownCapture={() => onStartCrop(1)}
               disabled={
                 cropMode === "cropping" ||
                 upscaleState !== "idle" ||
@@ -243,7 +243,7 @@ export function ImageActionBar({
             </button>
             <button
               type="button"
-              onClick={() => onStartCrop(undefined)}
+              onMouseDownCapture={() => onStartCrop(undefined)}
               disabled={
                 cropMode === "cropping" ||
                 upscaleState !== "idle" ||

@@ -88,7 +88,7 @@ export function SettingsModal({
                   <li key={section.id}>
                     <button
                       type="button"
-                      onClick={() => onSectionChange(section.id)}
+                      onMouseDownCapture={() => onSectionChange(section.id)}
                       className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
                         activeSection === section.id
                           ? "bg-primary text-white"
@@ -107,11 +107,16 @@ export function SettingsModal({
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
                 <DialogTitle className="text-lg font-semibold text-gray-900">
-                  {SECTIONS.find((s) => s.id === activeSection)?.label}
+                  {(() => {
+                    const idx = SECTIONS.findIndex(
+                      (s) => s.id === activeSection,
+                    );
+                    return idx !== -1 ? SECTIONS[idx].label : "";
+                  })()}
                 </DialogTitle>
                 <button
                   type="button"
-                  onClick={onClose}
+                  onMouseDownCapture={onClose}
                   className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />

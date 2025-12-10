@@ -133,7 +133,7 @@ function SortableProviderItem({
       {/* Config gear icon */}
       <button
         type="button"
-        onClick={onConfigClick}
+        onMouseDownCapture={onConfigClick}
         className={`p-1.5 rounded-md transition-colors cursor-pointer ${
           isConfigOpen
             ? "text-primary bg-primary/10"
@@ -375,7 +375,7 @@ export function UpscaleSettings({
               ) : (
                 <button
                   type="button"
-                  onClick={handleConnect}
+                  onMouseDownCapture={handleConnect}
                   disabled={!canConnect}
                   className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-hover disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
                 >
@@ -429,7 +429,7 @@ export function UpscaleSettings({
               ) : (
                 <button
                   type="button"
-                  onClick={handleStabilityConnect}
+                  onMouseDownCapture={handleStabilityConnect}
                   disabled={!canConnectStability}
                   className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-hover disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
                 >

@@ -21,11 +21,14 @@ export function useCropUndo({
   const handleUndoCrop = useCallback(
     async (pending: PendingCrop) => {
       toast.dismiss(pending.toastId);
-      const imageToRestore = images.find((img) => img.id === pending.imageId);
-      if (!imageToRestore) {
+      const imageToRestoreIdx = images.findIndex(
+        (img) => img.id === pending.imageId,
+      );
+      if (imageToRestoreIdx === -1) {
         setPendingCrop(null);
         return;
       }
+      const imageToRestore = images[imageToRestoreIdx];
 
       const restoredBlob = new Blob([pending.originalData], {
         type: pending.originalType,
@@ -40,12 +43,12 @@ export function useCropUndo({
       }
 
       setImages((draft) => {
-        const img = draft.find((i) => i.id === pending.imageId);
-        if (img) {
-          img.file = restoredFile;
-          img.fullImageUrl = restoredFullImageUrl;
-          img.width = pending.originalWidth;
-          img.height = pending.originalHeight;
+        const idx = draft.findIndex((i) => i.id === pending.imageId);
+        if (idx !== -1) {
+          draft[idx].file = restoredFile;
+          draft[idx].fullImageUrl = restoredFullImageUrl;
+          draft[idx].width = pending.originalWidth;
+          draft[idx].height = pending.originalHeight;
         }
       });
 
@@ -81,8 +84,9 @@ export function useCropUndo({
       newWidth: number,
       newHeight: number,
     ) => {
-      const imageToUpdate = images.find((img) => img.id === imageId);
-      if (!imageToUpdate) return;
+      const imageToUpdateIdx = images.findIndex((img) => img.id === imageId);
+      if (imageToUpdateIdx === -1) return;
+      const imageToUpdate = images[imageToUpdateIdx];
 
       if (pendingCrop) {
         toast.dismiss(pendingCrop.toastId);
@@ -104,12 +108,12 @@ export function useCropUndo({
       }
 
       setImages((draft) => {
-        const img = draft.find((i) => i.id === imageId);
-        if (img) {
-          img.file = newFile;
-          img.fullImageUrl = newFullImageUrl;
-          img.width = newWidth;
-          img.height = newHeight;
+        const idx = draft.findIndex((i) => i.id === imageId);
+        if (idx !== -1) {
+          draft[idx].file = newFile;
+          draft[idx].fullImageUrl = newFullImageUrl;
+          draft[idx].width = newWidth;
+          draft[idx].height = newHeight;
         }
       });
 

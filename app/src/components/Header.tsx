@@ -167,7 +167,7 @@ export function Header({
                     {({ focus }) => (
                       <button
                         type="button"
-                        onClick={() => onExport("json")}
+                        onMouseDownCapture={() => onExport("json")}
                         className={clsx(
                           "w-full px-4 py-2.5 text-left text-sm text-gray-700 flex items-center gap-2 transition-colors cursor-pointer",
                           focus && "bg-gray-50",
@@ -182,7 +182,7 @@ export function Header({
                     {({ focus }) => (
                       <button
                         type="button"
-                        onClick={() => onExport("jsonl")}
+                        onMouseDownCapture={() => onExport("jsonl")}
                         className={clsx(
                           "w-full px-4 py-2.5 text-left text-sm text-gray-700 flex items-center gap-2 border-t border-gray-100 transition-colors cursor-pointer",
                           focus && "bg-gray-50",

@@ -26,7 +26,7 @@ export function DeleteToast({
       </p>
       <button
         type="button"
-        onClick={() => {
+        onMouseDownCapture={() => {
           toast.dismiss(t.id);
           onUndo(pending);
         }}
@@ -37,7 +37,7 @@ export function DeleteToast({
       </button>
       <button
         type="button"
-        onClick={() => {
+        onMouseDownCapture={() => {
           toast.dismiss(t.id);
           onDismiss(pending);
         }}
@@ -71,7 +71,7 @@ export function CropToast({ t, pending, onUndo, onDismiss }: CropToastProps) {
       </p>
       <button
         type="button"
-        onClick={() => {
+        onMouseDownCapture={() => {
           toast.dismiss(t.id);
           onUndo(pending);
         }}
@@ -82,7 +82,7 @@ export function CropToast({ t, pending, onUndo, onDismiss }: CropToastProps) {
       </button>
       <button
         type="button"
-        onClick={() => {
+        onMouseDownCapture={() => {
           toast.dismiss(t.id);
           onDismiss();
         }}

@@ -11,7 +11,7 @@ export function EmptyState({ onSelectFolder }: EmptyStateProps) {
         {/* Upload icon with decorative background */}
         <button
           type="button"
-          onClick={onSelectFolder}
+          onMouseDownCapture={onSelectFolder}
           className="relative mb-8 cursor-pointer group"
         >
           <div className="absolute inset-0 bg-primary/10 rounded-full blur-2xl scale-150 group-hover:bg-primary/15 transition-colors" />
@@ -34,7 +34,7 @@ export function EmptyState({ onSelectFolder }: EmptyStateProps) {
         {/* Action button */}
         <button
           type="button"
-          onClick={onSelectFolder}
+          onMouseDownCapture={onSelectFolder}
           className="flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium text-white bg-primary rounded-xl hover:bg-primary-hover transition-colors cursor-pointer shadow-md hover:shadow-lg"
         >
           <FolderUp className="w-5 h-5" />

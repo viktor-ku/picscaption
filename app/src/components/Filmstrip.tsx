@@ -97,7 +97,7 @@ export function Filmstrip({
               type="button"
               key={image.id}
               ref={isSelected ? selectedThumbnailRef : undefined}
-              onClick={() => onSelectImage(image.id)}
+              onMouseDownCapture={() => onSelectImage(image.id)}
               className={clsx(
                 "relative flex-shrink-0 w-20 h-20 overflow-hidden cursor-pointer",
                 "border-2 transition-colors",

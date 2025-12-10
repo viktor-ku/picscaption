@@ -255,7 +255,7 @@ export function ImagePreview({
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-3">
             <button
               type="button"
-              onClick={handleDiscard}
+              onMouseDownCapture={handleDiscard}
               disabled={isSaving}
               className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gray-800/90 hover:bg-gray-800 text-white font-medium shadow-xl backdrop-blur-sm transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
@@ -264,7 +264,7 @@ export function ImagePreview({
             </button>
             <button
               type="button"
-              onClick={handleKeep}
+              onMouseDownCapture={handleKeep}
               disabled={isSaving}
               className="flex items-center gap-2 px-5 py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white font-medium shadow-xl backdrop-blur-sm transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
