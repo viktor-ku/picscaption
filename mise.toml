@@ -1,4 +1,9 @@
-[tasks.dev]
+[tasks."dev:app"]
 run = [
   "cd app && bun dev",
+]
+
+[tasks."dev:convex"]
+run = [
+  "cd app && bunx convex dev",
 ]
