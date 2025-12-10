@@ -1,0 +1,5 @@
+---
+applyAlways: true
+---
+
+Always prefer `onKeyDownCapture` event instead of `onClick` as it provides much better user experience.
