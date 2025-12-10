@@ -1,0 +1,6 @@
+---
+globs:
+alwaysApply: true
+---
+
+Run `biome format src --fix` after all changes done to apply correct formatting

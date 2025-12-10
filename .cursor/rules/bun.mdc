@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+Always use `bun` instead of `npm`. When install use `-E` to get pinned versions.
