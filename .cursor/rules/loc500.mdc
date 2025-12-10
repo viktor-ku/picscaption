@@ -1,0 +1,9 @@
+---
+alwaysApply: false
+---
+
+Keep any file to be less than 500 lines of code.
+
+If a file exceeds 500 lines of code - we have to refactor to either reusable components (astro, react, etc.) or utilities, libs, etc.
+
+The only files that are allowed to be more than 500 lines of code are .html and .md and .mdx (astro static content pages).
