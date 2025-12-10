@@ -1,0 +1,8 @@
+---
+applyAlways: false
+glob: app/convex/**/*
+---
+
+We are using Convex as our database.
+
+https://docs.convex.dev/api/https://docs.convex.dev/api/
