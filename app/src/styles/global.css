@@ -10,10 +10,12 @@
 
 /* Dragging state - applied to body during resize */
 body.resizing {
+  /* biome-ignore lint/complexity/noImportantStyles: Required to override all cursors during drag */
   cursor: col-resize !important;
   user-select: none;
 }
 
 body.resizing * {
+  /* biome-ignore lint/complexity/noImportantStyles: Required to override all cursors during drag */
   cursor: col-resize !important;
 }

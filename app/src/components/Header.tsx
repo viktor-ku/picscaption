@@ -1,13 +1,10 @@
 import { Fragment } from "react";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import {
-  FolderOpen,
   Download,
   Image,
-  CircleHelp,
   Check,
   Loader2,
-  PenLine,
   ChevronDown,
   Settings,
   Sparkles,
@@ -35,7 +32,7 @@ interface HeaderProps {
 
 export function Header({
   imageCount,
-  captionedCount,
+  captionedCount: _captionedCount,
   saveStatus,
   onExport,
   onShowSettings,

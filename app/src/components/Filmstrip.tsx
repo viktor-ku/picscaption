@@ -43,6 +43,7 @@ export function Filmstrip({
   );
 
   // Clear broken image tracking when images array changes (new folder loaded)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Intentionally depends on images to reset when folder changes
   useEffect(() => {
     setBrokenImageIds(new Set());
   }, [images]);

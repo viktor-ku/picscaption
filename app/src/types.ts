@@ -1,3 +1,5 @@
+import type { StoredCaption } from "./lib/storage";
+
 export interface ImageData {
   id: string;
   file: File;
@@ -8,4 +10,36 @@ export interface ImageData {
   caption: string;
   width?: number;
   height?: number;
+}
+
+export type SaveStatus = "saving" | "saved" | null;
+
+export interface PendingRestoreData {
+  images: ImageData[];
+  directory: string;
+  storedCaptions: Map<string, StoredCaption>;
+  matchedCount: number;
+}
+
+export interface PendingDeletion {
+  image: ImageData;
+  originalIndex: number;
+  toastId: string;
+  fileData: ArrayBuffer; // Actual file contents for restore
+}
+
+export interface PendingCrop {
+  imageId: string;
+  originalData: ArrayBuffer; // Actual file contents for restore
+  originalType: string;
+  originalWidth: number;
+  originalHeight: number;
+  newWidth: number;
+  newHeight: number;
+  toastId: string;
+}
+
+export interface BulkUpscaleProgress {
+  current: number;
+  total: number;
 }

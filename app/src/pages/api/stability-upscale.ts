@@ -30,7 +30,7 @@ export const POST: APIRoute = async ({ request }) => {
     const formData = await request.formData();
     const image = formData.get("image");
 
-    if (!image || !(image instanceof File || image instanceof Blob)) {
+    if (!image || typeof image === "string") {
       return new Response(
         JSON.stringify({
           error: "Missing image",
