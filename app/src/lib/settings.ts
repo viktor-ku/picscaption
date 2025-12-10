@@ -5,11 +5,15 @@ const SETTINGS_KEY = "picscaption-settings";
 export interface Settings {
   upscaleServerUrl: string;
   allowDeletions: boolean;
+  profileName: string;
+  profileEmail: string;
 }
 
 const DEFAULT_SETTINGS: Settings = {
   upscaleServerUrl: "",
   allowDeletions: true,
+  profileName: "",
+  profileEmail: "",
 };
 
 export function getSettings(): Settings {

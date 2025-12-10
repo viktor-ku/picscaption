@@ -14,6 +14,7 @@ import {
   RestoreHistoryModal,
   SettingsModal,
   DeleteAllDataModal,
+  type SettingsSection,
 } from "./index";
 import type { ImageData } from "../types";
 import {
@@ -174,14 +175,25 @@ export function App() {
   const [bulkUpscaleProgress, setBulkUpscaleProgress] =
     useState<BulkUpscaleProgress | null>(null);
   const [isDeleteAllDataOpen, setIsDeleteAllDataOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const params = new URLSearchParams(window.location.search);
-    return params.get("settings") === "1";
-  });
+  const [settingsSection, setSettingsSection] =
+    useState<SettingsSection | null>(() => {
+      if (typeof window === "undefined") return null;
+      const params = new URLSearchParams(window.location.search);
+      const section = params.get("settings");
+      if (section === "general" || section === "profile") {
+        return section;
+      }
+      return null;
+    });
+  const isSettingsOpen = settingsSection !== null;
   const [settings, setSettings] = useState<Settings>(() => {
     if (typeof window === "undefined") {
-      return { upscaleServerUrl: "", allowDeletions: true };
+      return {
+        upscaleServerUrl: "",
+        allowDeletions: true,
+        profileName: "",
+        profileEmail: "",
+      };
     }
     return getSettings();
   });
@@ -240,13 +252,13 @@ export function App() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
-    if (isSettingsOpen) {
-      url.searchParams.set("settings", "1");
+    if (settingsSection) {
+      url.searchParams.set("settings", settingsSection);
     } else {
       url.searchParams.delete("settings");
     }
     window.history.replaceState({}, "", url);
-  }, [isSettingsOpen]);
+  }, [settingsSection]);
 
   // Auto-save to IndexedDB when images change (debounced)
   useEffect(() => {
@@ -1457,19 +1469,21 @@ export function App() {
         onSelectFolder={handleSelectFolder}
         onExport={handleExport}
         onShowHelp={() => setIsHelpOpen(true)}
-        onShowSettings={() => setIsSettingsOpen(true)}
+        onShowSettings={() => setSettingsSection("general")}
         onBulkEdit={() => setIsBulkEditOpen(true)}
         onBulkUpscale={() => setIsBulkUpscaleOpen(true)}
-        onDeleteAllData={() => setIsDeleteAllDataOpen(true)}
         bulkUpscaleProgress={bulkUpscaleProgress}
       />
 
       {/* Settings modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={() => setSettingsSection(null)}
         settings={settings}
         onSettingsChange={handleSettingsChange}
+        onDeleteAllData={() => setIsDeleteAllDataOpen(true)}
+        activeSection={settingsSection ?? "general"}
+        onSectionChange={setSettingsSection}
       />
 
       {/* Keybindings modal */}

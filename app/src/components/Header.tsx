@@ -10,8 +10,6 @@ import {
   PenLine,
   ChevronDown,
   Settings,
-  MoreVertical,
-  Trash2,
   Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
@@ -34,7 +32,6 @@ interface HeaderProps {
   onShowSettings: () => void;
   onBulkEdit: () => void;
   onBulkUpscale: () => void;
-  onDeleteAllData: () => void;
   bulkUpscaleProgress?: BulkUpscaleProgress | null;
 }
 
@@ -48,7 +45,6 @@ export function Header({
   onShowSettings,
   onBulkEdit,
   onBulkUpscale,
-  onDeleteAllData,
   bulkUpscaleProgress,
 }: HeaderProps) {
   const hasImages = imageCount > 0;
@@ -198,42 +194,6 @@ export function Header({
                       >
                         <span className="font-medium">JSON Lines</span>
                         <span className="text-gray-400 text-xs">.jsonl</span>
-                      </button>
-                    )}
-                  </MenuItem>
-                </MenuItems>
-              </Fragment>
-            )}
-          </Menu>
-          {/* More options dropdown */}
-          <Menu as="div" className="relative">
-            {() => (
-              <Fragment>
-                <MenuButton
-                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
-                  title="More options"
-                >
-                  <MoreVertical className="w-5 h-5" />
-                </MenuButton>
-
-                <MenuItems
-                  transition
-                  anchor="bottom end"
-                  className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden z-50 focus:outline-none origin-top-right transition duration-100 ease-out data-[closed]:scale-95 data-[closed]:opacity-0"
-                >
-                  <MenuItem>
-                    {({ focus }) => (
-                      <button
-                        type="button"
-                        onClick={onDeleteAllData}
-                        className={clsx(
-                          "w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors",
-                          focus ? "bg-red-50" : "",
-                          "text-red-600",
-                        )}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        <span className="font-medium">Delete All Data</span>
                       </button>
                     )}
                   </MenuItem>

@@ -6,7 +6,7 @@ export { EmptyState } from "./EmptyState";
 export { KeybindingsModal } from "./KeybindingsModal";
 export { BulkEditModal } from "./BulkEditModal";
 export { RestoreHistoryModal } from "./RestoreHistoryModal";
-export { SettingsModal } from "./SettingsModal";
+export { SettingsModal, type SettingsSection } from "./SettingsModal";
 export { Toggle } from "./Toggle";
 export { DeleteAllDataModal } from "./DeleteAllDataModal";
 export { BulkUpscaleModal } from "./BulkUpscaleModal";
