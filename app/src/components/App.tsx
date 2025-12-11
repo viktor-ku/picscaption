@@ -11,14 +11,12 @@ import {
   KeybindingsModal,
   BulkEditModal,
   BulkUpscaleModal,
-  RestoreHistoryModal,
   SettingsModal,
   DeleteAllDataModal,
   type SettingsSection,
 } from "./index";
 import { ResizeHandle } from "./ResizeHandle";
 import type { Settings } from "../lib/settings";
-import { deleteCaptions, clearAllData, makeKey } from "../lib/storage";
 import { exportCaptions } from "../lib/export";
 import {
   imagesAtom,
@@ -27,7 +25,6 @@ import {
   errorMessageAtom,
   saveStatusAtom,
   settingsAtom,
-  pendingRestoreAtom,
   isCroppingAtom,
   currentIndexAtom,
   selectedImageAtom,
@@ -52,7 +49,6 @@ export function App() {
   const [errorMessage, setErrorMessage] = useAtom(errorMessageAtom);
   const [saveStatus, setSaveStatus] = useAtom(saveStatusAtom);
   const [settings, setSettings] = useAtom(settingsAtom);
-  const [pendingRestore, setPendingRestore] = useAtom(pendingRestoreAtom);
   const setIsCropping = useSetAtom(isCroppingAtom);
 
   // Derived atoms (read-only)
@@ -79,7 +75,6 @@ export function App() {
   const {
     fileInputRef,
     directoryHandleRef,
-    finalizeImages,
     handleSelectFolder,
     handleFolderChange,
   } = useFileHandling({
@@ -88,7 +83,6 @@ export function App() {
     setSelectedImageId,
     setCurrentDirectory,
     setErrorMessage,
-    setPendingRestore,
   });
 
   // Bulk upscale hook
@@ -136,7 +130,13 @@ export function App() {
 
   // Other hooks
   useImagePreloading(images, selectedImageId, setImages);
-  useAutoSave(images, currentDirectory, setSaveStatus, setErrorMessage);
+  useAutoSave(
+    images,
+    currentDirectory,
+    setSaveStatus,
+    setErrorMessage,
+    directoryHandleRef,
+  );
   useKeyboardNavigation({
     handleDeleteImage,
     handleUndoCrop,
@@ -188,32 +188,6 @@ export function App() {
     window.history.replaceState({}, "", url);
   }, [settingsSection]);
 
-  const handleRestoreHistory = useCallback(() => {
-    if (!pendingRestore) return;
-    const { images: newImages, directory, storedCaptions } = pendingRestore;
-    for (const img of newImages) {
-      const stored = storedCaptions.get(img.fileName);
-      if (stored) img.caption = stored.caption;
-    }
-    finalizeImages(newImages, directory);
-    setPendingRestore(null);
-  }, [pendingRestore, finalizeImages, setPendingRestore]);
-
-  const handleDiscardHistory = useCallback(async () => {
-    if (!pendingRestore) return;
-    const { images: newImages, directory, storedCaptions } = pendingRestore;
-    try {
-      const keysToDelete = Array.from(storedCaptions.values()).map(
-        (c) => c.key,
-      );
-      await deleteCaptions(keysToDelete);
-    } catch (err) {
-      console.error("Failed to delete from IndexedDB:", err);
-    }
-    finalizeImages(newImages, directory);
-    setPendingRestore(null);
-  }, [pendingRestore, finalizeImages, setPendingRestore]);
-
   const handleCaptionChange = useCallback(
     (caption: string) => {
       if (!selectedImageId) return;
@@ -233,7 +207,7 @@ export function App() {
   );
 
   const handleRemoveBrokenImage = useCallback(
-    async (id: string) => {
+    (id: string) => {
       const imgIdx = images.findIndex((i) => i.id === id);
       if (imgIdx === -1) return;
       const img = images[imgIdx];
@@ -245,17 +219,10 @@ export function App() {
         const r = images.filter((i) => i.id !== id);
         setSelectedImageId(r.length > 0 ? r[0].id : null);
       }
-      if (currentDirectory) {
-        try {
-          await deleteCaptions([makeKey(currentDirectory, img.fileName)]);
-        } catch {
-          /* ignore */
-        }
-      }
       if (img.thumbnailUrl) URL.revokeObjectURL(img.thumbnailUrl);
       if (img.fullImageUrl) URL.revokeObjectURL(img.fullImageUrl);
     },
-    [images, selectedImageId, currentDirectory, setImages, setSelectedImageId],
+    [images, selectedImageId, setImages, setSelectedImageId],
   );
 
   const handleExport = useCallback(
@@ -283,26 +250,20 @@ export function App() {
     [setSettings],
   );
 
-  const handleDeleteAllData = useCallback(async () => {
-    try {
-      await clearAllData();
-      localStorage.clear();
-      for (const img of images) {
-        if (img.thumbnailUrl) URL.revokeObjectURL(img.thumbnailUrl);
-        if (img.fullImageUrl) URL.revokeObjectURL(img.fullImageUrl);
-      }
-      // Reset all atoms
-      setImages([]);
-      setSelectedImageId(null);
-      setCurrentDirectory(null);
-      setErrorMessage(null);
-      setSaveStatus(null);
-      setPendingRestore(null);
-      directoryHandleRef.current = null;
-      setIsDeleteAllDataOpen(false);
-    } catch {
-      setErrorMessage("Failed to delete all data");
+  const handleDeleteAllData = useCallback(() => {
+    localStorage.clear();
+    for (const img of images) {
+      if (img.thumbnailUrl) URL.revokeObjectURL(img.thumbnailUrl);
+      if (img.fullImageUrl) URL.revokeObjectURL(img.fullImageUrl);
     }
+    // Reset all atoms
+    setImages([]);
+    setSelectedImageId(null);
+    setCurrentDirectory(null);
+    setErrorMessage(null);
+    setSaveStatus(null);
+    directoryHandleRef.current = null;
+    setIsDeleteAllDataOpen(false);
   }, [
     images,
     setImages,
@@ -310,7 +271,6 @@ export function App() {
     setCurrentDirectory,
     setErrorMessage,
     setSaveStatus,
-    setPendingRestore,
     directoryHandleRef,
   ]);
 
@@ -416,14 +376,6 @@ export function App() {
         isOpen={isDeleteAllDataOpen}
         onClose={() => setIsDeleteAllDataOpen(false)}
         onConfirm={handleDeleteAllData}
-      />
-
-      <RestoreHistoryModal
-        isOpen={pendingRestore !== null}
-        matchedCount={pendingRestore?.matchedCount ?? 0}
-        totalCount={pendingRestore?.images.length ?? 0}
-        onRestore={handleRestoreHistory}
-        onDiscard={handleDiscardHistory}
       />
 
       {errorMessage && (

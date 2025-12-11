@@ -1,17 +1,19 @@
 import { useRef, useCallback } from "react";
-import type { ImageData, PendingRestoreData } from "../types";
-import {
-  getCaptionsByDirectory,
-  deleteCaptions,
-  makeKey,
-} from "../lib/storage";
+import { useMutation } from "convex/react";
+import type { ImageData } from "../types";
 import { generateThumbnailsBatch } from "../lib/thumbnail";
-import {
-  isImageFile,
-  hasImageExtension,
-  supportsDirectoryPicker,
-} from "../lib/image-utils";
+import { isImageFile, supportsDirectoryPicker } from "../lib/image-utils";
 import { useUser } from "./useUser";
+import {
+  readSidecar,
+  writeSidecar,
+  generateUUID,
+  createSidecarData,
+  type SidecarData,
+} from "../lib/image-identity";
+import { computeDHash } from "../lib/perceptual-hash";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 
 interface UseFileHandlingOptions {
   images: ImageData[];
@@ -19,7 +21,6 @@ interface UseFileHandlingOptions {
   setSelectedImageId: (id: string | null) => void;
   setCurrentDirectory: (dir: string | null) => void;
   setErrorMessage: (msg: string | null) => void;
-  setPendingRestore: (data: PendingRestoreData | null) => void;
 }
 
 export function useFileHandling({
@@ -28,11 +29,11 @@ export function useFileHandling({
   setSelectedImageId,
   setCurrentDirectory,
   setErrorMessage,
-  setPendingRestore,
 }: UseFileHandlingOptions) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const directoryHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
-  const { ensureUser } = useUser();
+  const { ensureUser, userId, isAvailable: isConvexAvailable } = useUser();
+  const upsertImage = useMutation(api.images.upsert);
 
   const finalizeImages = useCallback(
     (newImages: ImageData[], directoryName: string) => {
@@ -46,7 +47,6 @@ export function useFileHandling({
       setErrorMessage(null);
 
       // Batch thumbnail updates to reduce state updates
-      // Use object to hold mutable state that persists across callbacks
       const batch: {
         pending: Map<string, string>;
         timeout: ReturnType<typeof setTimeout> | null;
@@ -75,7 +75,6 @@ export function useFileHandling({
           const imageId = newImages[index]?.id;
           if (!imageId) return;
           batch.pending.set(imageId, thumbnailUrl);
-          // Debounce flush - coalesces rapid updates into single state update
           if (batch.timeout) clearTimeout(batch.timeout);
           batch.timeout = setTimeout(flushThumbnails, 0);
         },
@@ -98,15 +97,13 @@ export function useFileHandling({
 
   const processFiles = useCallback(
     async (files: File[], directoryName: string) => {
+      // Cleanup old URLs
       for (const img of images) {
         if (img.thumbnailUrl) URL.revokeObjectURL(img.thumbnailUrl);
         if (img.fullImageUrl) URL.revokeObjectURL(img.fullImageUrl);
       }
 
       const imageFiles = files.filter(isImageFile);
-      const zeroByteImageFiles = files.filter(
-        (file) => file.size === 0 && hasImageExtension(file),
-      );
 
       if (imageFiles.length === 0) {
         setImages([]);
@@ -123,8 +120,10 @@ export function useFileHandling({
         }),
       );
 
+      // Create images immediately with temporary UUIDs - show UI fast
       const newImages: ImageData[] = imageFiles.map((file, index) => ({
         id: `${index}-${file.name}`,
+        uuid: generateUUID(), // Temporary, will be replaced from sidecar if exists
         file,
         thumbnailUrl: null,
         fullImageUrl: null,
@@ -133,42 +132,19 @@ export function useFileHandling({
         caption: "",
       }));
 
-      try {
-        const storedCaptions = await getCaptionsByDirectory(directoryName);
-
-        if (zeroByteImageFiles.length > 0 && storedCaptions.size > 0) {
-          const keysToDelete = zeroByteImageFiles
-            .filter((file) => storedCaptions.has(file.name))
-            .map((file) => makeKey(directoryName, file.name));
-
-          if (keysToDelete.length > 0) {
-            await deleteCaptions(keysToDelete);
-            for (const file of zeroByteImageFiles) {
-              storedCaptions.delete(file.name);
-            }
-          }
-        }
-
-        if (storedCaptions.size > 0) {
-          const matchedCount = newImages.filter((img) =>
-            storedCaptions.has(img.fileName),
-          ).length;
-
-          if (matchedCount > 0) {
-            setPendingRestore({
-              images: newImages,
-              directory: directoryName,
-              storedCaptions,
-              matchedCount,
-            });
-            return;
-          }
-        }
-      } catch (err) {
-        console.error("Failed to check IndexedDB:", err);
-      }
-
+      // Show images in UI immediately
       finalizeImages(newImages, directoryName);
+
+      // Process sidecars in background (don't block UI)
+      const dirHandle = directoryHandleRef.current;
+      if (dirHandle) {
+        processSidecarsInBackground(
+          dirHandle,
+          newImages,
+          setImages,
+          isConvexAvailable && userId ? { upsertImage, userId } : null,
+        );
+      }
     },
     [
       images,
@@ -177,7 +153,9 @@ export function useFileHandling({
       setSelectedImageId,
       setCurrentDirectory,
       setErrorMessage,
-      setPendingRestore,
+      isConvexAvailable,
+      userId,
+      upsertImage,
     ],
   );
 
@@ -267,4 +245,101 @@ export function useFileHandling({
     handleSelectFolder,
     handleFolderChange,
   };
+}
+
+interface ConvexContext {
+  upsertImage: (args: {
+    uuid: string;
+    pHash: string;
+    caption: string;
+    tags: string[];
+    createdAt: string;
+    updatedAt: string;
+    userId: Id<"users">;
+  }) => Promise<Id<"images">>;
+  userId: Id<"users">;
+}
+
+/**
+ * Process sidecars in background - reads existing sidecars and creates new ones.
+ * Updates image state with UUIDs and captions from sidecars.
+ * Syncs to Convex if available.
+ */
+async function processSidecarsInBackground(
+  dirHandle: FileSystemDirectoryHandle,
+  images: ImageData[],
+  setImages: (fn: (draft: ImageData[]) => void) => void,
+  convex: ConvexContext | null,
+) {
+  // Batch updates to reduce state changes
+  const updates: Map<string, { uuid?: string; caption?: string }> = new Map();
+  let hasUpdates = false;
+
+  // Process all sidecars in parallel
+  await Promise.all(
+    images.map(async (img) => {
+      try {
+        const sidecar = await readSidecar(dirHandle, img.fileName);
+        if (sidecar) {
+          // Sidecar exists - use its UUID and caption
+          if (sidecar.uuid !== img.uuid || sidecar.caption !== img.caption) {
+            updates.set(img.id, {
+              uuid: sidecar.uuid,
+              caption: sidecar.caption,
+            });
+            hasUpdates = true;
+          }
+          // Sync existing sidecar to Convex
+          if (convex) {
+            syncToConvex(convex, sidecar);
+          }
+        } else {
+          // No sidecar - compute pHash and create one
+          try {
+            const pHash = await computeDHash(img.file);
+            const sidecarData = createSidecarData(img.uuid, pHash, img.caption);
+            await writeSidecar(dirHandle, img.fileName, sidecarData);
+            // Sync new sidecar to Convex
+            if (convex) {
+              syncToConvex(convex, sidecarData);
+            }
+          } catch (err) {
+            console.error(`Failed to create sidecar for ${img.fileName}:`, err);
+          }
+        }
+      } catch (err) {
+        console.error(`Error processing sidecar for ${img.fileName}:`, err);
+      }
+    }),
+  );
+
+  // Apply all updates in a single state change
+  if (hasUpdates) {
+    setImages((draft) => {
+      for (const [id, update] of updates) {
+        const idx = draft.findIndex((i) => i.id === id);
+        if (idx !== -1) {
+          if (update.uuid) draft[idx].uuid = update.uuid;
+          if (update.caption) draft[idx].caption = update.caption;
+        }
+      }
+    });
+  }
+}
+
+/**
+ * Sync sidecar data to Convex (fire-and-forget).
+ */
+function syncToConvex(convex: ConvexContext, sidecar: SidecarData) {
+  convex
+    .upsertImage({
+      uuid: sidecar.uuid,
+      pHash: sidecar.pHash,
+      caption: sidecar.caption,
+      tags: sidecar.tags,
+      createdAt: sidecar.createdAt,
+      updatedAt: sidecar.updatedAt,
+      userId: convex.userId,
+    })
+    .catch((err) => console.error("Failed to sync to Convex:", err));
 }

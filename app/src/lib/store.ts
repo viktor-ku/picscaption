@@ -5,7 +5,6 @@ import { atomWithStorage } from "jotai/utils";
 import type {
   ImageData,
   SaveStatus,
-  PendingRestoreData,
   PendingDeletion,
   PendingCrop,
   BulkUpscaleProgress,
@@ -70,9 +69,6 @@ export const pendingDeletionAtom = atom<PendingDeletion | null>(null);
 
 /** Pending crop for undo */
 export const pendingCropAtom = atom<PendingCrop | null>(null);
-
-/** Pending restore data when loading a folder with history */
-export const pendingRestoreAtom = atom<PendingRestoreData | null>(null);
 
 // ============================================================================
 // UI State Atoms

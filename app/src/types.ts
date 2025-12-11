@@ -1,7 +1,6 @@
-import type { StoredCaption } from "./lib/storage";
-
 export interface ImageData {
   id: string;
+  uuid: string; // Persistent cross-session identity
   file: File;
   thumbnailUrl: string | null; // Generated progressively, null = placeholder
   fullImageUrl: string | null; // Full resolution, loaded on demand
@@ -13,13 +12,6 @@ export interface ImageData {
 }
 
 export type SaveStatus = "saving" | "saved" | null;
-
-export interface PendingRestoreData {
-  images: ImageData[];
-  directory: string;
-  storedCaptions: Map<string, StoredCaption>;
-  matchedCount: number;
-}
 
 export interface PendingDeletion {
   image: ImageData;

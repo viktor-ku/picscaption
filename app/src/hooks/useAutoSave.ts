@@ -1,22 +1,37 @@
 import { useEffect, useRef } from "react";
+import { useMutation } from "convex/react";
 import type { ImageData, SaveStatus } from "../types";
-import { saveCaptions, makeKey, type StoredCaption } from "../lib/storage";
+import {
+  readSidecar,
+  writeSidecar,
+  updateSidecarData,
+} from "../lib/image-identity";
+import { useUser } from "./useUser";
+import { api } from "../../convex/_generated/api";
 
 const SAVE_DEBOUNCE_MS = 1000;
 
 /**
- * Hook for auto-saving captions to IndexedDB with debouncing.
+ * Hook for auto-saving captions to sidecar files and Convex with debouncing.
  */
 export function useAutoSave(
   images: ImageData[],
   currentDirectory: string | null,
   setSaveStatus: (status: SaveStatus) => void,
   setErrorMessage: (msg: string | null) => void,
+  directoryHandleRef?: React.RefObject<FileSystemDirectoryHandle | null>,
 ) {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track last saved captions to only update changed ones
+  const lastSavedCaptionsRef = useRef<Map<string, string>>(new Map());
+
+  const { userId, isAvailable: isConvexAvailable } = useUser();
+  const updateCaption = useMutation(api.images.updateCaption);
 
   useEffect(() => {
     if (images.length === 0 || !currentDirectory) return;
+
+    const dirHandle = directoryHandleRef?.current;
 
     // Only save if there's something meaningful to save
     const hasContent = images.some((img) => img.caption.trim());
@@ -31,22 +46,63 @@ export function useAutoSave(
 
     saveTimeoutRef.current = setTimeout(async () => {
       try {
-        const dataToSave: StoredCaption[] = images.map((img) => ({
-          key: makeKey(currentDirectory, img.fileName),
-          directory: currentDirectory,
-          fileName: img.fileName,
-          caption: img.caption,
-          updatedAt: new Date().toISOString(),
-        }));
+        const updatePromises: Promise<void>[] = [];
 
-        await saveCaptions(dataToSave);
+        for (const img of images) {
+          const lastCaption = lastSavedCaptionsRef.current.get(img.uuid);
+          if (lastCaption !== img.caption) {
+            // Caption changed - update sidecar if we have a directory handle
+            if (dirHandle) {
+              updatePromises.push(
+                (async () => {
+                  try {
+                    const existing = await readSidecar(dirHandle, img.fileName);
+                    if (existing) {
+                      const updated = updateSidecarData(existing, {
+                        caption: img.caption,
+                      });
+                      await writeSidecar(dirHandle, img.fileName, updated);
+                    }
+                  } catch (err) {
+                    console.error(
+                      `Failed to update sidecar for ${img.fileName}:`,
+                      err,
+                    );
+                  }
+                })(),
+              );
+            }
+
+            // Also sync to Convex if available
+            if (isConvexAvailable && userId) {
+              updatePromises.push(
+                updateCaption({
+                  uuid: img.uuid,
+                  caption: img.caption,
+                  userId,
+                })
+                  .then(() => {})
+                  .catch((err) =>
+                    console.error(
+                      `Failed to sync caption to Convex for ${img.fileName}:`,
+                      err,
+                    ),
+                  ),
+              );
+            }
+
+            lastSavedCaptionsRef.current.set(img.uuid, img.caption);
+          }
+        }
+
+        await Promise.all(updatePromises);
         setSaveStatus("saved");
 
         // Auto-clear "saved" status after 2 seconds
         setTimeout(() => setSaveStatus(null), 2000);
       } catch (err) {
-        console.error("Failed to save to IndexedDB:", err);
-        setErrorMessage("Failed to save session data");
+        console.error("Failed to save captions:", err);
+        setErrorMessage("Failed to save captions");
         setSaveStatus(null);
       }
     }, SAVE_DEBOUNCE_MS);
@@ -56,5 +112,14 @@ export function useAutoSave(
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [images, currentDirectory, setSaveStatus, setErrorMessage]);
+  }, [
+    images,
+    currentDirectory,
+    setSaveStatus,
+    setErrorMessage,
+    directoryHandleRef,
+    isConvexAvailable,
+    userId,
+    updateCaption,
+  ]);
 }

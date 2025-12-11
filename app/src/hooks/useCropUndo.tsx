@@ -1,9 +1,18 @@
 import { useCallback } from "react";
 import { useAtom } from "jotai";
+import { useMutation } from "convex/react";
 import toast from "react-hot-toast";
 import type { ImageData, PendingCrop } from "../types";
 import { CropToast } from "../components/UndoToast";
 import { pendingCropAtom } from "../lib/store";
+import { computeDHash } from "../lib/perceptual-hash";
+import {
+  readSidecar,
+  writeSidecar,
+  updateSidecarData,
+} from "../lib/image-identity";
+import { useUser } from "./useUser";
+import { api } from "../../convex/_generated/api";
 
 interface UseCropUndoOptions {
   images: ImageData[];
@@ -17,6 +26,8 @@ export function useCropUndo({
   setImages,
 }: UseCropUndoOptions) {
   const [pendingCrop, setPendingCrop] = useAtom(pendingCropAtom);
+  const { userId, isAvailable: isConvexAvailable } = useUser();
+  const updateHash = useMutation(api.images.updateHash);
 
   const handleUndoCrop = useCallback(
     async (pending: PendingCrop) => {
@@ -61,6 +72,36 @@ export function useCropUndo({
           const writable = await fileHandle.createWritable();
           await writable.write(restoredBlob);
           await writable.close();
+
+          // Restore pHash in sidecar after undo
+          const dirHandle = directoryHandleRef.current;
+          computeDHash(restoredBlob)
+            .then(async (pHash) => {
+              const existing = await readSidecar(
+                dirHandle,
+                imageToRestore.fileName,
+              );
+              if (existing) {
+                const updated = updateSidecarData(existing, { pHash });
+                await writeSidecar(dirHandle, imageToRestore.fileName, updated);
+              }
+              // Sync pHash to Convex
+              if (isConvexAvailable && userId) {
+                updateHash({
+                  uuid: imageToRestore.uuid,
+                  pHash,
+                  userId,
+                }).catch((err) =>
+                  console.error("Failed to sync pHash to Convex:", err),
+                );
+              }
+            })
+            .catch((err) =>
+              console.error(
+                `Failed to update sidecar pHash for ${imageToRestore.fileName}:`,
+                err,
+              ),
+            );
         } catch (err) {
           console.error("Failed to restore original image to disk:", err);
         }
@@ -68,7 +109,15 @@ export function useCropUndo({
 
       setPendingCrop(null);
     },
-    [images, directoryHandleRef, setImages, setPendingCrop],
+    [
+      images,
+      directoryHandleRef,
+      setImages,
+      setPendingCrop,
+      isConvexAvailable,
+      userId,
+      updateHash,
+    ],
   );
 
   const handleCancelCrop = useCallback(() => {
@@ -126,6 +175,36 @@ export function useCropUndo({
           const writable = await fileHandle.createWritable();
           await writable.write(newBlob);
           await writable.close();
+
+          // Update pHash in sidecar after crop (image content changed)
+          const dirHandle = directoryHandleRef.current;
+          computeDHash(newBlob)
+            .then(async (pHash) => {
+              const existing = await readSidecar(
+                dirHandle,
+                imageToUpdate.fileName,
+              );
+              if (existing) {
+                const updated = updateSidecarData(existing, { pHash });
+                await writeSidecar(dirHandle, imageToUpdate.fileName, updated);
+              }
+              // Sync pHash to Convex
+              if (isConvexAvailable && userId) {
+                updateHash({
+                  uuid: imageToUpdate.uuid,
+                  pHash,
+                  userId,
+                }).catch((err) =>
+                  console.error("Failed to sync pHash to Convex:", err),
+                );
+              }
+            })
+            .catch((err) =>
+              console.error(
+                `Failed to update sidecar pHash for ${imageToUpdate.fileName}:`,
+                err,
+              ),
+            );
         } catch (err) {
           console.error("Failed to save cropped image to disk:", err);
         }
@@ -172,6 +251,9 @@ export function useCropUndo({
       directoryHandleRef,
       setImages,
       setPendingCrop,
+      isConvexAvailable,
+      userId,
+      updateHash,
     ],
   );
 
