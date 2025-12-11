@@ -8,6 +8,7 @@ import {
   X,
   Check,
   Loader2,
+  Asterisk,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -30,6 +31,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { api } from "../../../convex/_generated/api";
 import type { Id, Doc } from "../../../convex/_generated/dataModel";
 import { Toggle } from "../Toggle";
+import { DeleteMetaObjectModal } from "../DeleteMetaObjectModal";
 import type { MetaObjectType } from "../../lib/settings";
 
 type MetaObjectDoc = Doc<"metaObjects">;
@@ -40,6 +42,7 @@ interface SortableMetaItemProps {
   editName: string;
   editType: MetaObjectType;
   onToggleActive: (active: boolean) => void;
+  onToggleRequired: (required: boolean) => void;
   onStartEdit: () => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
@@ -55,6 +58,7 @@ function SortableMetaItem({
   editName,
   editType,
   onToggleActive,
+  onToggleRequired,
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
@@ -150,11 +154,14 @@ function SortableMetaItem({
         <GripVertical className="w-4 h-4" />
       </button>
 
-      {/* Name */}
-      <div className="flex-1 min-w-0">
+      {/* Name with required indicator */}
+      <div className="flex-1 min-w-0 flex items-center gap-1.5">
         <span className="text-sm font-medium text-gray-900">
           {metaObject.name}
         </span>
+        {metaObject.required && (
+          <Asterisk className="w-3 h-3 text-red-500" title="Required" />
+        )}
       </div>
 
       {/* Type badge */}
@@ -168,13 +175,27 @@ function SortableMetaItem({
         {metaObject.type}
       </span>
 
+      {/* Required toggle */}
+      <div className="flex items-center gap-1" title="Required for import">
+        <span className="text-xs text-gray-500">Req</span>
+        <Toggle
+          checked={metaObject.required}
+          onChange={onToggleRequired}
+          label=""
+          size="sm"
+        />
+      </div>
+
       {/* Active toggle */}
-      <Toggle
-        checked={metaObject.active}
-        onChange={onToggleActive}
-        label=""
-        size="sm"
-      />
+      <div className="flex items-center gap-1" title="Include in imports">
+        <span className="text-xs text-gray-500">Active</span>
+        <Toggle
+          checked={metaObject.active}
+          onChange={onToggleActive}
+          label=""
+          size="sm"
+        />
+      </div>
 
       {/* Edit button */}
       <button
@@ -210,6 +231,10 @@ export function MetaFieldsSettings({ userId }: MetaFieldsSettingsProps) {
   const [newType, setNewType] = useState<MetaObjectType>("string");
   const [isSaving, setIsSaving] = useState(false);
 
+  // Delete modal state
+  const [deleteTarget, setDeleteTarget] = useState<MetaObjectDoc | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // DnD sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -223,9 +248,19 @@ export function MetaFieldsSettings({ userId }: MetaFieldsSettingsProps) {
     api.metaObjects.listByUser,
     userId ? { userId } : "skip",
   );
+
+  // Query image count for the delete target
+  const deleteTargetImageCount = useQuery(
+    api.metaObjects.getImageCount,
+    deleteTarget && userId
+      ? { id: deleteTarget._id, userId }
+      : "skip",
+  );
+
   const createMutation = useMutation(api.metaObjects.create);
   const updateMutation = useMutation(api.metaObjects.update);
   const toggleActiveMutation = useMutation(api.metaObjects.toggleActive);
+  const toggleRequiredMutation = useMutation(api.metaObjects.toggleRequired);
   const reorderMutation = useMutation(api.metaObjects.reorder);
   const removeMutation = useMutation(api.metaObjects.remove);
 
@@ -246,6 +281,7 @@ export function MetaFieldsSettings({ userId }: MetaFieldsSettingsProps) {
         name: newName.trim(),
         type: newType,
         active: true,
+        required: false,
         userId,
       });
       setNewName("");
@@ -314,18 +350,47 @@ export function MetaFieldsSettings({ userId }: MetaFieldsSettingsProps) {
     }
   };
 
-  const handleDelete = async (metaObject: MetaObjectDoc) => {
+  const handleToggleRequired = async (
+    metaObject: MetaObjectDoc,
+    required: boolean,
+  ) => {
     if (!userId) return;
 
     try {
-      await removeMutation({
+      await toggleRequiredMutation({
         id: metaObject._id,
+        required,
+        userId,
+      });
+    } catch (error) {
+      toast.error("Failed to toggle required state");
+    }
+  };
+
+  const handleDeleteClick = (metaObject: MetaObjectDoc) => {
+    setDeleteTarget(metaObject);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget || !userId) return;
+
+    setIsDeleting(true);
+    try {
+      await removeMutation({
+        id: deleteTarget._id,
         userId,
       });
       toast.success("Meta field deleted");
+      setDeleteTarget(null);
     } catch (error) {
       toast.error("Failed to delete meta field");
+    } finally {
+      setIsDeleting(false);
     }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteTarget(null);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -360,8 +425,10 @@ export function MetaFieldsSettings({ userId }: MetaFieldsSettingsProps) {
       {/* Section description */}
       <div className="space-y-2">
         <p className="text-sm text-gray-600">
-          Define metadata fields to import from CSV or JSON files. Active fields
-          will be matched against column headers during import.
+          Define metadata fields to import from CSV or JSON files. Drag to
+          reorder priority. Active fields will be matched against column headers
+          during import. Required fields must have a value for the import to
+          succeed.
         </p>
       </div>
 
@@ -400,10 +467,13 @@ export function MetaFieldsSettings({ userId }: MetaFieldsSettingsProps) {
                     onToggleActive={(active) =>
                       handleToggleActive(metaObject, active)
                     }
+                    onToggleRequired={(required) =>
+                      handleToggleRequired(metaObject, required)
+                    }
                     onStartEdit={() => handleStartEdit(metaObject)}
                     onCancelEdit={handleCancelEdit}
                     onSaveEdit={handleSaveEdit}
-                    onDelete={() => handleDelete(metaObject)}
+                    onDelete={() => handleDeleteClick(metaObject)}
                     onEditNameChange={setEditName}
                     onEditTypeChange={setEditType}
                     isSaving={isSaving}
@@ -483,6 +553,17 @@ export function MetaFieldsSettings({ userId }: MetaFieldsSettingsProps) {
           </button>
         )}
       </div>
+
+      {/* Delete confirmation modal */}
+      <DeleteMetaObjectModal
+        isOpen={deleteTarget !== null}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        metaObjectName={deleteTarget?.name ?? ""}
+        imageCount={deleteTargetImageCount ?? 0}
+        isLoading={deleteTarget !== null && deleteTargetImageCount === undefined}
+        isDeleting={isDeleting}
+      />
     </>
   );
 }

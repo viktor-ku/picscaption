@@ -39,5 +39,6 @@ export interface MetaObject {
   name: string;
   type: MetaObjectType;
   active: boolean;
+  required: boolean;
   order: number;
 }

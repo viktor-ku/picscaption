@@ -20,6 +20,30 @@ export const listByUser = query({
 });
 
 /**
+ * Get count of images associated with a meta object.
+ */
+export const getImageCount = query({
+  args: {
+    id: v.id("metaObjects"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const metaObject = await ctx.db.get(args.id);
+
+    if (!metaObject || metaObject.userId !== args.userId) {
+      return 0;
+    }
+
+    const values = await ctx.db
+      .query("imageMetaValues")
+      .withIndex("by_meta_object", (q) => q.eq("metaObjectId", args.id))
+      .collect();
+
+    return values.length;
+  },
+});
+
+/**
  * Create a new meta object.
  */
 export const create = mutation({
@@ -27,6 +51,7 @@ export const create = mutation({
     name: v.string(),
     type: v.union(v.literal("string"), v.literal("number")),
     active: v.boolean(),
+    required: v.optional(v.boolean()),
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
@@ -59,6 +84,7 @@ export const create = mutation({
       name: args.name,
       type: args.type,
       active: args.active,
+      required: args.required ?? false,
       order: maxOrder + 1,
       userId: args.userId,
       createdAt: now,
@@ -76,6 +102,7 @@ export const update = mutation({
     name: v.optional(v.string()),
     type: v.optional(v.union(v.literal("string"), v.literal("number"))),
     active: v.optional(v.boolean()),
+    required: v.optional(v.boolean()),
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
@@ -103,6 +130,7 @@ export const update = mutation({
       name: string;
       type: "string" | "number";
       active: boolean;
+      required: boolean;
       updatedAt: string;
     }> = {
       updatedAt: new Date().toISOString(),
@@ -111,6 +139,7 @@ export const update = mutation({
     if (args.name !== undefined) updates.name = args.name;
     if (args.type !== undefined) updates.type = args.type;
     if (args.active !== undefined) updates.active = args.active;
+    if (args.required !== undefined) updates.required = args.required;
 
     await ctx.db.patch(args.id, updates);
   },
@@ -134,6 +163,29 @@ export const toggleActive = mutation({
 
     await ctx.db.patch(args.id, {
       active: args.active,
+      updatedAt: new Date().toISOString(),
+    });
+  },
+});
+
+/**
+ * Toggle the required state of a meta object.
+ */
+export const toggleRequired = mutation({
+  args: {
+    id: v.id("metaObjects"),
+    required: v.boolean(),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const metaObject = await ctx.db.get(args.id);
+
+    if (!metaObject || metaObject.userId !== args.userId) {
+      throw new Error("Meta object not found");
+    }
+
+    await ctx.db.patch(args.id, {
+      required: args.required,
       updatedAt: new Date().toISOString(),
     });
   },
@@ -166,7 +218,7 @@ export const reorder = mutation({
 });
 
 /**
- * Delete a meta object.
+ * Delete a meta object and all associated image meta values.
  */
 export const remove = mutation({
   args: {
@@ -180,6 +232,17 @@ export const remove = mutation({
       throw new Error("Meta object not found");
     }
 
+    // Cascade delete all associated image meta values
+    const associatedValues = await ctx.db
+      .query("imageMetaValues")
+      .withIndex("by_meta_object", (q) => q.eq("metaObjectId", args.id))
+      .collect();
+
+    for (const value of associatedValues) {
+      await ctx.db.delete(value._id);
+    }
+
+    // Delete the meta object itself
     await ctx.db.delete(args.id);
   },
 });
