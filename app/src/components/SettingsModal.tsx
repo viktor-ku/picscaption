@@ -31,7 +31,7 @@ interface SettingsModalProps {
 const SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: "general", label: "General" },
   { id: "upscale", label: "Upscale" },
-  { id: "meta", label: "Meta" },
+  { id: "meta", label: "Metaobjects" },
   { id: "profile", label: "Profile" },
 ];
 
@@ -80,10 +80,10 @@ export function SettingsModal({
       />
 
       {/* Modal container - centered */}
-      <div className="fixed inset-0 flex items-center justify-center p-4">
+      <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4">
         <DialogPanel
           transition
-          className="w-full lg:w-1/2 h-[80vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden transition duration-200 ease-out data-[closed]:opacity-0 data-[closed]:scale-95"
+          className="w-full md:w-4/5 lg:w-3/5 xl:w-1/2 h-[80vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden transition duration-200 ease-out data-[closed]:opacity-0 data-[closed]:scale-95"
         >
           <div className="flex h-full">
             {/* Sidebar */}

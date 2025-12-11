@@ -61,6 +61,18 @@ export const settingsAtom = atomWithStorage<Settings>(
 );
 
 // ============================================================================
+// User State (with localStorage persistence)
+// ============================================================================
+
+/** User ID with automatic localStorage sync - shared across all useUser() instances */
+export const userIdAtom = atomWithStorage<string | null>(
+  "picscaption-user-id",
+  null,
+  undefined,
+  { getOnInit: true },
+);
+
+// ============================================================================
 // Pending State Atoms (for undo operations)
 // ============================================================================
 

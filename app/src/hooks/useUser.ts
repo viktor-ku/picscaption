@@ -1,12 +1,10 @@
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { useAtomValue } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { settingsAtom } from "../lib/store";
+import { settingsAtom, userIdAtom } from "../lib/store";
 import { useConvexAvailable } from "../components/ConvexClientProvider";
-
-const USER_ID_KEY = "picscaption-user-id";
 
 export interface UseUserReturn {
   userId: Id<"users"> | null;
@@ -34,13 +32,9 @@ export interface UseUserReturn {
 export function useUser(): UseUserReturn {
   const isConvexAvailable = useConvexAvailable();
 
-  // All hooks must be called unconditionally to satisfy React's rules of hooks
-  const [userId, setUserId] = useState<Id<"users"> | null>(() => {
-    // Initialize from localStorage synchronously
-    if (typeof window === "undefined") return null;
-    const stored = localStorage.getItem(USER_ID_KEY);
-    return stored ? (stored as Id<"users">) : null;
-  });
+  // Use shared atom for userId - all useUser() instances see the same value
+  const [storedUserId, setStoredUserId] = useAtom(userIdAtom);
+  const userId = storedUserId as Id<"users"> | null;
   const settings = useAtomValue(settingsAtom);
 
   const createAnonymousUser = useMutation(api.users.createAnonymousUser);
@@ -58,11 +52,9 @@ export function useUser(): UseUserReturn {
   const ensureUser = useCallback(async (): Promise<Id<"users"> | null> => {
     if (!isConvexAvailable) return null;
 
-    // Check if we already have a user
-    const existingUserId = localStorage.getItem(USER_ID_KEY);
-    if (existingUserId) {
-      setUserId(existingUserId as Id<"users">);
-      return existingUserId as Id<"users">;
+    // Check if we already have a user (from shared atom)
+    if (storedUserId) {
+      return storedUserId as Id<"users">;
     }
 
     // Create anonymous user
@@ -71,8 +63,8 @@ export function useUser(): UseUserReturn {
         name: settings.profileName || undefined,
         email: settings.profileEmail || undefined,
       });
-      localStorage.setItem(USER_ID_KEY, newUserId);
-      setUserId(newUserId);
+      // Update shared atom - all useUser() instances will see this immediately
+      setStoredUserId(newUserId);
       return newUserId;
     } catch (error) {
       console.error("Failed to create anonymous user:", error);
@@ -80,6 +72,8 @@ export function useUser(): UseUserReturn {
     }
   }, [
     isConvexAvailable,
+    storedUserId,
+    setStoredUserId,
     createAnonymousUser,
     settings.profileName,
     settings.profileEmail,

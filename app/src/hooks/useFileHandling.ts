@@ -32,14 +32,11 @@ export function useFileHandling({
 }: UseFileHandlingOptions) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const directoryHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
-  const { ensureUser, userId, isAvailable: isConvexAvailable } = useUser();
+  const { ensureUser, isAvailable: isConvexAvailable } = useUser();
   const upsertImage = useMutation(api.images.upsert);
 
   const finalizeImages = useCallback(
     (newImages: ImageData[], directoryName: string) => {
-      // Ensure user exists (creates anonymous user on first upload if needed)
-      ensureUser();
-
       setCurrentDirectory(directoryName);
       // Direct set with new array
       setImages(newImages);
@@ -86,17 +83,15 @@ export function useFileHandling({
         },
       );
     },
-    [
-      setCurrentDirectory,
-      setImages,
-      setSelectedImageId,
-      setErrorMessage,
-      ensureUser,
-    ],
+    [setCurrentDirectory, setImages, setSelectedImageId, setErrorMessage],
   );
 
   const processFiles = useCallback(
     async (files: File[], directoryName: string) => {
+      // Ensure user exists before processing (creates anonymous user on first upload)
+      // Must await to get the actual userId, not rely on stale state
+      const actualUserId = await ensureUser();
+
       // Cleanup old URLs
       for (const img of images) {
         if (img.thumbnailUrl) URL.revokeObjectURL(img.thumbnailUrl);
@@ -142,7 +137,9 @@ export function useFileHandling({
           dirHandle,
           newImages,
           setImages,
-          isConvexAvailable && userId ? { upsertImage, userId } : null,
+          isConvexAvailable && actualUserId
+            ? { upsertImage, userId: actualUserId }
+            : null,
         );
       }
     },
@@ -154,7 +151,7 @@ export function useFileHandling({
       setCurrentDirectory,
       setErrorMessage,
       isConvexAvailable,
-      userId,
+      ensureUser,
       upsertImage,
     ],
   );

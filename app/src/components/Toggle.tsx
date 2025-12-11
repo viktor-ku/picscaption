@@ -14,9 +14,13 @@ export function Toggle({ checked, onChange, label, size = "md" }: ToggleProps) {
       ? "h-4 w-4 data-[checked]:translate-x-4"
       : "h-5 w-5 data-[checked]:translate-x-5";
 
-  const handleMouseDownCapture = useCallback(() => {
-    onChange(!checked);
-  }, [checked, onChange]);
+  const handleMouseDownCapture = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      onChange(!checked);
+    },
+    [checked, onChange],
+  );
 
   return (
     <div className="flex items-center gap-3">
