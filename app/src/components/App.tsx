@@ -39,6 +39,7 @@ import {
   useKeyboardNavigation,
   useFileHandling,
   useBulkUpscale,
+  useUser,
 } from "../hooks";
 
 export function App() {
@@ -65,9 +66,14 @@ export function App() {
     useState<SettingsSection | null>(() => {
       if (typeof window === "undefined") return null;
       const s = new URLSearchParams(window.location.search).get("settings");
-      return s === "general" || s === "upscale" || s === "profile" ? s : null;
+      return s === "general" || s === "upscale" || s === "meta" || s === "profile"
+        ? s
+        : null;
     });
   const isSettingsOpen = settingsSection !== null;
+
+  // User hook for Convex user ID
+  const { userId } = useUser();
 
   const imagesRef = useRef(images);
 
@@ -351,6 +357,7 @@ export function App() {
         onDeleteAllData={() => setIsDeleteAllDataOpen(true)}
         activeSection={settingsSection ?? "general"}
         onSectionChange={setSettingsSection}
+        userId={userId}
       />
 
       <KeybindingsModal

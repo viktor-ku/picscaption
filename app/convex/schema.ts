@@ -24,4 +24,16 @@ export default defineSchema({
     .index("by_uuid", ["uuid"])
     .index("by_user", ["userId"])
     .index("by_phash_user", ["pHash", "userId"]),
+
+  metaObjects: defineTable({
+    name: v.string(), // Field name / key (e.g., "guidance", "steps")
+    type: v.union(v.literal("string"), v.literal("number")), // Value type
+    active: v.boolean(), // Whether to include in imports
+    order: v.number(), // Display/priority order
+    userId: v.id("users"), // Owner
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_name", ["userId", "name"]),
 });
