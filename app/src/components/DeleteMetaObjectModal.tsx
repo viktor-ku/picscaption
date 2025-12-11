@@ -67,13 +67,17 @@ export function DeleteMetaObjectModal({
                   <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
                     <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
                     <div className="text-sm text-red-800">
-                      <p className="font-medium">This action cannot be undone</p>
+                      <p className="font-medium">
+                        This action cannot be undone
+                      </p>
                       <p className="mt-1 text-red-700">
-                        The meta field "<span className="font-semibold">{metaObjectName}</span>" is connected to{" "}
+                        The meta field "
+                        <span className="font-semibold">{metaObjectName}</span>"
+                        is connected to{" "}
                         <span className="font-semibold">{imageCount}</span>{" "}
-                        {imageCount === 1 ? "image" : "images"}. Deleting it will
-                        permanently remove all associated metadata values from
-                        those images.
+                        {imageCount === 1 ? "image" : "images"}. Deleting it
+                        will permanently remove all associated metadata values
+                        from those images.
                       </p>
                     </div>
                   </div>
@@ -83,7 +87,8 @@ export function DeleteMetaObjectModal({
                     <div className="text-sm text-amber-800">
                       <p>
                         Are you sure you want to delete the meta field "
-                        <span className="font-semibold">{metaObjectName}</span>"?
+                        <span className="font-semibold">{metaObjectName}</span>
+                        "?
                       </p>
                     </div>
                   </div>

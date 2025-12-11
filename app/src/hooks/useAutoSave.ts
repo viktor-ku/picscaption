@@ -42,57 +42,63 @@ export function useAutoSave(
       clearTimeout(saveTimeoutRef.current);
     }
 
-    setSaveStatus("saving");
-
     saveTimeoutRef.current = setTimeout(async () => {
       try {
+        // First, check if there are any actual changes to save
+        const changedImages = images.filter(
+          (img) => lastSavedCaptionsRef.current.get(img.uuid) !== img.caption,
+        );
+
+        // No changes to save
+        if (changedImages.length === 0) return;
+
+        // Now we know there are changes - show saving status
+        setSaveStatus("saving");
+
         const updatePromises: Promise<void>[] = [];
 
-        for (const img of images) {
-          const lastCaption = lastSavedCaptionsRef.current.get(img.uuid);
-          if (lastCaption !== img.caption) {
-            // Caption changed - update sidecar if we have a directory handle
-            if (dirHandle) {
-              updatePromises.push(
-                (async () => {
-                  try {
-                    const existing = await readSidecar(dirHandle, img.fileName);
-                    if (existing) {
-                      const updated = updateSidecarData(existing, {
-                        caption: img.caption,
-                      });
-                      await writeSidecar(dirHandle, img.fileName, updated);
-                    }
-                  } catch (err) {
-                    console.error(
-                      `Failed to update sidecar for ${img.fileName}:`,
-                      err,
-                    );
+        for (const img of changedImages) {
+          // Caption changed - update sidecar if we have a directory handle
+          if (dirHandle) {
+            updatePromises.push(
+              (async () => {
+                try {
+                  const existing = await readSidecar(dirHandle, img.fileName);
+                  if (existing) {
+                    const updated = updateSidecarData(existing, {
+                      caption: img.caption,
+                    });
+                    await writeSidecar(dirHandle, img.fileName, updated);
                   }
-                })(),
-              );
-            }
-
-            // Also sync to Convex if available
-            if (isConvexAvailable && userId) {
-              updatePromises.push(
-                updateCaption({
-                  uuid: img.uuid,
-                  caption: img.caption,
-                  userId,
-                })
-                  .then(() => {})
-                  .catch((err) =>
-                    console.error(
-                      `Failed to sync caption to Convex for ${img.fileName}:`,
-                      err,
-                    ),
-                  ),
-              );
-            }
-
-            lastSavedCaptionsRef.current.set(img.uuid, img.caption);
+                } catch (err) {
+                  console.error(
+                    `Failed to update sidecar for ${img.fileName}:`,
+                    err,
+                  );
+                }
+              })(),
+            );
           }
+
+          // Also sync to Convex if available
+          if (isConvexAvailable && userId) {
+            updatePromises.push(
+              updateCaption({
+                uuid: img.uuid,
+                caption: img.caption,
+                userId,
+              })
+                .then(() => {})
+                .catch((err) =>
+                  console.error(
+                    `Failed to sync caption to Convex for ${img.fileName}:`,
+                    err,
+                  ),
+                ),
+            );
+          }
+
+          lastSavedCaptionsRef.current.set(img.uuid, img.caption);
         }
 
         await Promise.all(updatePromises);

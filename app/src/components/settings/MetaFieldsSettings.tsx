@@ -98,7 +98,6 @@ function SortableMetaItem({
           onChange={(e) => onEditNameChange(e.target.value)}
           placeholder="Field name"
           className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-          autoFocus
         />
 
         <select
@@ -160,7 +159,9 @@ function SortableMetaItem({
           {metaObject.name}
         </span>
         {metaObject.required && (
-          <Asterisk className="w-3 h-3 text-red-500" title="Required" />
+          <span title="Required">
+            <Asterisk className="w-3 h-3 text-red-500" />
+          </span>
         )}
       </div>
 
@@ -252,9 +253,7 @@ export function MetaFieldsSettings({ userId }: MetaFieldsSettingsProps) {
   // Query image count for the delete target
   const deleteTargetImageCount = useQuery(
     api.metaObjects.getImageCount,
-    deleteTarget && userId
-      ? { id: deleteTarget._id, userId }
-      : "skip",
+    deleteTarget && userId ? { id: deleteTarget._id, userId } : "skip",
   );
 
   const createMutation = useMutation(api.metaObjects.create);
@@ -345,7 +344,7 @@ export function MetaFieldsSettings({ userId }: MetaFieldsSettingsProps) {
         active,
         userId,
       });
-    } catch (error) {
+    } catch {
       toast.error("Failed to toggle meta field");
     }
   };
@@ -362,7 +361,7 @@ export function MetaFieldsSettings({ userId }: MetaFieldsSettingsProps) {
         required,
         userId,
       });
-    } catch (error) {
+    } catch {
       toast.error("Failed to toggle required state");
     }
   };
@@ -382,7 +381,7 @@ export function MetaFieldsSettings({ userId }: MetaFieldsSettingsProps) {
       });
       toast.success("Meta field deleted");
       setDeleteTarget(null);
-    } catch (error) {
+    } catch {
       toast.error("Failed to delete meta field");
     } finally {
       setIsDeleting(false);
@@ -409,7 +408,7 @@ export function MetaFieldsSettings({ userId }: MetaFieldsSettingsProps) {
         orderedIds,
         userId,
       });
-    } catch (error) {
+    } catch {
       toast.error("Failed to reorder meta fields");
     }
   };
@@ -497,7 +496,6 @@ export function MetaFieldsSettings({ userId }: MetaFieldsSettingsProps) {
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Field name (e.g., guidance)"
               className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-              autoFocus
               onKeyDown={(e) => {
                 if (e.key === "Enter" && newName.trim()) {
                   handleCreate();
@@ -561,7 +559,9 @@ export function MetaFieldsSettings({ userId }: MetaFieldsSettingsProps) {
         onConfirm={handleDeleteConfirm}
         metaObjectName={deleteTarget?.name ?? ""}
         imageCount={deleteTargetImageCount ?? 0}
-        isLoading={deleteTarget !== null && deleteTargetImageCount === undefined}
+        isLoading={
+          deleteTarget !== null && deleteTargetImageCount === undefined
+        }
         isDeleting={isDeleting}
       />
     </>

@@ -114,10 +114,11 @@ export const update = mutation({
 
     // If name is being changed, check for duplicates
     if (args.name && args.name !== metaObject.name) {
+      const newName = args.name;
       const existing = await ctx.db
         .query("metaObjects")
         .withIndex("by_user_name", (q) =>
-          q.eq("userId", args.userId).eq("name", args.name),
+          q.eq("userId", args.userId).eq("name", newName),
         )
         .first();
 

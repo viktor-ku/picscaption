@@ -66,7 +66,10 @@ export function App() {
     useState<SettingsSection | null>(() => {
       if (typeof window === "undefined") return null;
       const s = new URLSearchParams(window.location.search).get("settings");
-      return s === "general" || s === "upscale" || s === "meta" || s === "profile"
+      return s === "general" ||
+        s === "upscale" ||
+        s === "meta" ||
+        s === "profile"
         ? s
         : null;
     });

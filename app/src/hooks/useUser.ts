@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useAtomValue } from "jotai";
 import { api } from "../../convex/_generated/api";
@@ -34,26 +34,7 @@ export interface UseUserReturn {
 export function useUser(): UseUserReturn {
   const isConvexAvailable = useConvexAvailable();
 
-  // If Convex isn't available, return early with empty state
-  if (!isConvexAvailable) {
-    return {
-      userId: null,
-      user: null,
-      isLoading: false,
-      isAvailable: false,
-      ensureUser: async () => null,
-    };
-  }
-
-  // Convex is available, use the full implementation
-  return useUserInternal();
-}
-
-/**
- * Internal hook that actually uses Convex.
- * Only called when Convex is available.
- */
-function useUserInternal(): UseUserReturn {
+  // All hooks must be called unconditionally to satisfy React's rules of hooks
   const [userId, setUserId] = useState<Id<"users"> | null>(() => {
     // Initialize from localStorage synchronously
     if (typeof window === "undefined") return null;
@@ -64,14 +45,19 @@ function useUserInternal(): UseUserReturn {
 
   const createAnonymousUser = useMutation(api.users.createAnonymousUser);
 
-  // Query user data if we have a userId
-  const user = useQuery(api.users.getUser, userId ? { userId } : "skip");
+  // Query user data if we have a userId and Convex is available
+  const user = useQuery(
+    api.users.getUser,
+    isConvexAvailable && userId ? { userId } : "skip",
+  );
 
   /**
    * Ensures a user exists. Creates one if needed.
    * Returns the user ID (existing or newly created).
    */
   const ensureUser = useCallback(async (): Promise<Id<"users"> | null> => {
+    if (!isConvexAvailable) return null;
+
     // Check if we already have a user
     const existingUserId = localStorage.getItem(USER_ID_KEY);
     if (existingUserId) {
@@ -92,7 +78,23 @@ function useUserInternal(): UseUserReturn {
       console.error("Failed to create anonymous user:", error);
       return null;
     }
-  }, [createAnonymousUser, settings.profileName, settings.profileEmail]);
+  }, [
+    isConvexAvailable,
+    createAnonymousUser,
+    settings.profileName,
+    settings.profileEmail,
+  ]);
+
+  // If Convex isn't available, return empty state
+  if (!isConvexAvailable) {
+    return {
+      userId: null,
+      user: null,
+      isLoading: false,
+      isAvailable: false,
+      ensureUser,
+    };
+  }
 
   const isLoading = userId !== null && user === undefined;
 
