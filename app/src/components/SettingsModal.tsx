@@ -7,9 +7,15 @@ import {
 } from "@headlessui/react";
 import { X, Settings as SettingsIcon } from "lucide-react";
 import type { Settings } from "../lib/settings";
-import { GeneralSettings, UpscaleSettings, ProfileSettings } from "./settings";
+import {
+  GeneralSettings,
+  UpscaleSettings,
+  ProfileSettings,
+  MetaFieldsSettings,
+} from "./settings";
+import type { Id } from "../../convex/_generated/dataModel";
 
-export type SettingsSection = "general" | "upscale" | "profile";
+export type SettingsSection = "general" | "upscale" | "meta" | "profile";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -19,11 +25,13 @@ interface SettingsModalProps {
   onDeleteAllData: () => void;
   activeSection: SettingsSection;
   onSectionChange: (section: SettingsSection) => void;
+  userId: Id<"users"> | null;
 }
 
 const SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: "general", label: "General" },
   { id: "upscale", label: "Upscale" },
+  { id: "meta", label: "Meta" },
   { id: "profile", label: "Profile" },
 ];
 
@@ -35,6 +43,7 @@ export function SettingsModal({
   onDeleteAllData,
   activeSection,
   onSectionChange,
+  userId,
 }: SettingsModalProps) {
   const [profileName, setProfileName] = useState(settings.profileName);
   const [profileEmail, setProfileEmail] = useState(settings.profileEmail);
@@ -137,6 +146,10 @@ export function SettingsModal({
                     settings={settings}
                     onSettingsChange={onSettingsChange}
                   />
+                )}
+
+                {activeSection === "meta" && (
+                  <MetaFieldsSettings userId={userId} />
                 )}
 
                 {activeSection === "profile" && (

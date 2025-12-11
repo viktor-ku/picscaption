@@ -30,3 +30,15 @@ export interface Settings {
   profileName: string;
   profileEmail: string;
 }
+
+// Meta object types (synced to Convex)
+export type MetaObjectType = "string" | "number";
+
+export interface MetaObject {
+  _id: string;
+  name: string;
+  type: MetaObjectType;
+  active: boolean;
+  required: boolean;
+  order: number;
+}

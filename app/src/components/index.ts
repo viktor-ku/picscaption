@@ -9,6 +9,7 @@ export { RestoreHistoryModal } from "./RestoreHistoryModal";
 export { SettingsModal, type SettingsSection } from "./SettingsModal";
 export { Toggle } from "./Toggle";
 export { DeleteAllDataModal } from "./DeleteAllDataModal";
+export { DeleteMetaObjectModal } from "./DeleteMetaObjectModal";
 export { BulkUpscaleModal } from "./BulkUpscaleModal";
 export {
   ConvexClientProvider,
