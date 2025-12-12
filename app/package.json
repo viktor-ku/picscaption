@@ -27,6 +27,7 @@
     "jotai": "2.16.0",
     "jotai-immer": "0.4.1",
     "lucide-react": "0.559.0",
+    "papaparse": "5.5.3",
     "pica": "9.0.1",
     "react": "19.2.1",
     "react-dom": "19.2.1",
@@ -37,6 +38,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.3.8",
     "@tailwindcss/vite": "4.1.17",
+    "@types/papaparse": "5.5.1",
     "@types/pica": "9.0.5",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",

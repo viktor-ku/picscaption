@@ -89,6 +89,31 @@ export const pendingCropAtom = atom<PendingCrop | null>(null);
 /** Bulk upscale progress */
 export const bulkUpscaleProgressAtom = atom<BulkUpscaleProgress | null>(null);
 
+/** Import state: idle, importing, or done */
+export type ImportState = "idle" | "importing" | "done";
+export const importStateAtom = atom<ImportState>("idle");
+
+/** Import progress (current row / total rows) */
+export interface ImportProgress {
+  current: number;
+  total: number;
+}
+export const importProgressAtom = atom<ImportProgress | null>(null);
+
+/** Import statistics for tracking created/updated counts and timing */
+export interface ImportStats {
+  created: number;
+  updated: number;
+  startTime: number; // Date.now() when import started
+  endTime?: number; // Date.now() when import finished
+  totalRows: number;
+  errors: string[];
+}
+export const importStatsAtom = atom<ImportStats | null>(null);
+
+/** Whether the import modal is open */
+export const importModalOpenAtom = atom<boolean>(false);
+
 // ============================================================================
 // Derived Atoms (computed from other atoms)
 // ============================================================================

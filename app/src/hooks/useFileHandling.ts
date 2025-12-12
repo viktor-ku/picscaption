@@ -247,6 +247,7 @@ export function useFileHandling({
 interface ConvexContext {
   upsertImage: (args: {
     uuid: string;
+    filename: string;
     pHash: string;
     caption: string;
     tags: string[];
@@ -288,7 +289,7 @@ async function processSidecarsInBackground(
           }
           // Sync existing sidecar to Convex
           if (convex) {
-            syncToConvex(convex, sidecar);
+            syncToConvex(convex, sidecar, img.fileName);
           }
         } else {
           // No sidecar - compute pHash and create one
@@ -298,7 +299,7 @@ async function processSidecarsInBackground(
             await writeSidecar(dirHandle, img.fileName, sidecarData);
             // Sync new sidecar to Convex
             if (convex) {
-              syncToConvex(convex, sidecarData);
+              syncToConvex(convex, sidecarData, img.fileName);
             }
           } catch (err) {
             console.error(`Failed to create sidecar for ${img.fileName}:`, err);
@@ -327,10 +328,15 @@ async function processSidecarsInBackground(
 /**
  * Sync sidecar data to Convex (fire-and-forget).
  */
-function syncToConvex(convex: ConvexContext, sidecar: SidecarData) {
+function syncToConvex(
+  convex: ConvexContext,
+  sidecar: SidecarData,
+  filename: string,
+) {
   convex
     .upsertImage({
       uuid: sidecar.uuid,
+      filename,
       pHash: sidecar.pHash,
       caption: sidecar.caption,
       tags: sidecar.tags,

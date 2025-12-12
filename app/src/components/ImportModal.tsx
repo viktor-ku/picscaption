@@ -1,0 +1,401 @@
+import { useRef, useEffect, useState } from "react";
+import { useAtomValue } from "jotai";
+import {
+  Dialog,
+  DialogBackdrop,
+  DialogPanel,
+  DialogTitle,
+} from "@headlessui/react";
+import {
+  X,
+  Upload,
+  Check,
+  Loader2,
+  Settings,
+  FileSpreadsheet,
+  ArrowRight,
+  Coffee,
+} from "lucide-react";
+import clsx from "clsx";
+import {
+  importStateAtom,
+  importProgressAtom,
+  importStatsAtom,
+  type ImportState,
+  type ImportProgress,
+  type ImportStats,
+} from "../lib/store";
+import type { MetaObject } from "../lib/settings";
+
+interface ImportModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onImportCsv: (file: File) => void;
+  onOpenMetaSettings: () => void;
+  activeMetaObjects: MetaObject[];
+}
+
+function formatDuration(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (minutes > 0) {
+    return `${minutes}m ${remainingSeconds}s`;
+  }
+  return `${seconds}s`;
+}
+
+function IdleView({
+  onImportCsv,
+  onOpenMetaSettings,
+  activeMetaObjects,
+  fileInputRef,
+}: {
+  onImportCsv: (file: File) => void;
+  onOpenMetaSettings: () => void;
+  activeMetaObjects: MetaObject[];
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onImportCsv(file);
+      e.target.value = "";
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
+      {/* Main import button */}
+      <div className="flex flex-col items-center py-8">
+        <button
+          type="button"
+          onMouseDownCapture={handleImportClick}
+          className="flex items-center gap-3 px-8 py-4 text-lg font-medium text-white bg-primary rounded-xl hover:bg-primary-hover transition-all duration-200 shadow-lg hover:shadow-xl cursor-pointer"
+        >
+          <Upload className="w-6 h-6" />
+          Select CSV File
+        </button>
+        <p className="mt-4 text-sm text-gray-500">
+          Import metadata from a CSV file
+        </p>
+      </div>
+
+      {/* Expected format info */}
+      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="flex items-start gap-3">
+          <FileSpreadsheet className="w-5 h-5 text-gray-400 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium text-gray-700">Expected CSV format</p>
+            <p className="mt-1 text-gray-500">
+              CSV must have a{" "}
+              <code className="px-1.5 py-0.5 bg-gray-200 rounded text-xs">
+                filename
+              </code>
+              ,{" "}
+              <code className="px-1.5 py-0.5 bg-gray-200 rounded text-xs">
+                file_name
+              </code>
+              ,{" "}
+              <code className="px-1.5 py-0.5 bg-gray-200 rounded text-xs">
+                file
+              </code>
+              , or{" "}
+              <code className="px-1.5 py-0.5 bg-gray-200 rounded text-xs">
+                image
+              </code>{" "}
+              column to match rows to images.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Active meta fields */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-medium text-gray-700">
+            Active meta fields to import
+          </h4>
+          <button
+            type="button"
+            onMouseDownCapture={onOpenMetaSettings}
+            className="flex items-center gap-1.5 text-xs text-primary hover:text-primary-hover transition-colors cursor-pointer"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            Configure
+          </button>
+        </div>
+
+        {activeMetaObjects.length === 0 ? (
+          <div className="p-4 text-center text-sm text-gray-500 bg-amber-50 border border-amber-200 rounded-lg">
+            <p>No active meta fields configured.</p>
+            <button
+              type="button"
+              onMouseDownCapture={onOpenMetaSettings}
+              className="mt-2 inline-flex items-center gap-1 text-amber-700 hover:text-amber-800 font-medium cursor-pointer"
+            >
+              Add meta fields
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {activeMetaObjects.map((mo) => (
+              <span
+                key={mo._id}
+                className={clsx(
+                  "px-2.5 py-1 text-xs font-medium rounded-full",
+                  mo.required
+                    ? "bg-red-100 text-red-700"
+                    : "bg-gray-100 text-gray-700",
+                )}
+              >
+                {mo.name}
+                {mo.required && <span className="ml-1">*</span>}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ImportingView({
+  progress,
+  stats,
+}: {
+  progress: ImportProgress | null;
+  stats: ImportStats | null;
+}) {
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  useEffect(() => {
+    if (!stats?.startTime) return;
+
+    const interval = setInterval(() => {
+      setElapsedTime(Date.now() - stats.startTime);
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [stats?.startTime]);
+
+  const progressPercent = progress
+    ? (progress.current / progress.total) * 100
+    : 0;
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Coffee icon and message */}
+      <div className="flex flex-col items-center py-4">
+        <Coffee className="w-12 h-12 text-amber-500" />
+        <p className="mt-3 text-sm text-gray-500 text-center">
+          Kick back, relax, and grab a coffee while we get your data ready.
+        </p>
+      </div>
+
+      {/* Progress bar */}
+      <div className="space-y-3">
+        <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary transition-all duration-300 ease-out"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-600 tabular-nums">
+            {progress
+              ? `${progress.current} / ${progress.total} rows`
+              : "Preparing..."}
+          </span>
+          <span className="text-gray-500 tabular-nums">
+            {formatDuration(elapsedTime)}
+          </span>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="flex items-center justify-center gap-8 py-4">
+        <div className="text-center">
+          <div className="text-3xl font-bold text-green-600 tabular-nums">
+            {stats?.created ?? 0}
+          </div>
+          <div className="text-sm text-gray-500 mt-1">New rows</div>
+        </div>
+        <div className="w-px h-12 bg-gray-200" />
+        <div className="text-center">
+          <div className="text-3xl font-bold text-blue-600 tabular-nums">
+            {stats?.updated ?? 0}
+          </div>
+          <div className="text-sm text-gray-500 mt-1">Existing rows</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DoneView({
+  stats,
+  onClose,
+}: {
+  stats: ImportStats | null;
+  onClose: () => void;
+}) {
+  const duration =
+    stats?.endTime && stats?.startTime ? stats.endTime - stats.startTime : 0;
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Success icon */}
+      <div className="flex justify-center py-4">
+        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center animate-[scaleIn_0.3s_ease-out]">
+          <Check className="w-10 h-10 text-green-600" />
+        </div>
+      </div>
+
+      {/* Heading */}
+      <div className="text-center">
+        <h3 className="text-xl font-semibold text-gray-900">Import Complete</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Completed in {formatDuration(duration)}
+        </p>
+      </div>
+
+      {/* Stats */}
+      <div className="flex items-center justify-center gap-8 py-4">
+        <div className="text-center">
+          <div className="text-3xl font-bold text-green-600 tabular-nums">
+            {stats?.created ?? 0}
+          </div>
+          <div className="text-sm text-gray-500 mt-1">New rows</div>
+        </div>
+        <div className="w-px h-12 bg-gray-200" />
+        <div className="text-center">
+          <div className="text-3xl font-bold text-blue-600 tabular-nums">
+            {stats?.updated ?? 0}
+          </div>
+          <div className="text-sm text-gray-500 mt-1">Existing rows</div>
+        </div>
+      </div>
+
+      {/* Errors if any */}
+      {stats?.errors && stats.errors.length > 0 && (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-sm font-medium text-amber-800">
+            {stats.errors.length} warning{stats.errors.length !== 1 ? "s" : ""}
+          </p>
+          <p className="text-xs text-amber-700 mt-1">
+            Check console for details
+          </p>
+        </div>
+      )}
+
+      {/* Close button */}
+      <div className="flex justify-center pt-2">
+        <button
+          type="button"
+          onMouseDownCapture={onClose}
+          className="px-6 py-2.5 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-hover transition-colors cursor-pointer"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function ImportModal({
+  isOpen,
+  onClose,
+  onImportCsv,
+  onOpenMetaSettings,
+  activeMetaObjects,
+}: ImportModalProps) {
+  const importState = useAtomValue(importStateAtom);
+  const importProgress = useAtomValue(importProgressAtom);
+  const importStats = useAtomValue(importStatsAtom);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Determine title based on state
+  const getTitle = (state: ImportState) => {
+    switch (state) {
+      case "importing":
+        return "Importing...";
+      case "done":
+        return "Import Complete";
+      default:
+        return "Import CSV";
+    }
+  };
+
+  // Don't allow closing during import
+  const handleClose = () => {
+    if (importState !== "importing") {
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onClose={handleClose} className="relative z-50">
+      {/* Backdrop */}
+      <DialogBackdrop
+        transition
+        className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-[closed]:opacity-0"
+      />
+
+      {/* Modal panel */}
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <DialogPanel
+          transition
+          className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transition duration-200 ease-out data-[closed]:scale-95 data-[closed]:opacity-0"
+        >
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <DialogTitle className="text-lg font-semibold text-gray-900">
+              {getTitle(importState)}
+            </DialogTitle>
+            {importState !== "importing" && (
+              <button
+                type="button"
+                onMouseDownCapture={handleClose}
+                className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+
+          {importState === "idle" && (
+            <IdleView
+              onImportCsv={onImportCsv}
+              onOpenMetaSettings={onOpenMetaSettings}
+              activeMetaObjects={activeMetaObjects}
+              fileInputRef={fileInputRef}
+            />
+          )}
+
+          {importState === "importing" && (
+            <ImportingView progress={importProgress} stats={importStats} />
+          )}
+
+          {importState === "done" && (
+            <DoneView stats={importStats} onClose={handleClose} />
+          )}
+        </DialogPanel>
+      </div>
+    </Dialog>
+  );
+}

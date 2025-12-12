@@ -1,7 +1,10 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { Toaster } from "react-hot-toast";
+import toast, { Toaster } from "react-hot-toast";
 import { useQuery } from "@tanstack/react-query";
+import { useQuery as useConvexQuery, useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import {
   Header,
   Filmstrip,
@@ -13,11 +16,17 @@ import {
   BulkUpscaleModal,
   SettingsModal,
   DeleteAllDataModal,
+  ImportModal,
   type SettingsSection,
 } from "./index";
 import { ResizeHandle } from "./ResizeHandle";
-import type { Settings } from "../lib/settings";
+import type { Settings, MetaObject } from "../lib/settings";
 import { exportCaptions } from "../lib/export";
+import {
+  readCsvFile,
+  parseAndValidateCsv,
+  formatImportErrors,
+} from "../lib/import";
 import {
   imagesAtom,
   selectedImageIdAtom,
@@ -29,6 +38,10 @@ import {
   currentIndexAtom,
   selectedImageAtom,
   captionedCountAtom,
+  importStateAtom,
+  importProgressAtom,
+  importStatsAtom,
+  importModalOpenAtom,
 } from "../lib/store";
 import {
   useImagePreloading,
@@ -57,6 +70,13 @@ export function App() {
   const selectedImage = useAtomValue(selectedImageAtom);
   const captionedCount = useAtomValue(captionedCountAtom);
 
+  // Import state (shared via Jotai)
+  const [importState, setImportState] = useAtom(importStateAtom);
+  const [importProgress, setImportProgress] = useAtom(importProgressAtom);
+  const [importStats, setImportStats] = useAtom(importStatsAtom);
+  const [isImportModalOpen, setIsImportModalOpen] =
+    useAtom(importModalOpenAtom);
+
   // Local UI state (not shared)
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
@@ -77,6 +97,13 @@ export function App() {
 
   // User hook for Convex user ID
   const { userId } = useUser();
+
+  // Convex queries and mutations for CSV import
+  const metaObjects = useConvexQuery(
+    api.metaObjects.listByUser,
+    userId ? { userId } : "skip",
+  );
+  const bulkUpsertMetaValues = useMutation(api.images.bulkUpsertMetaValues);
 
   const imagesRef = useRef(images);
 
@@ -240,6 +267,181 @@ export function App() {
     [images, directoryHandleRef],
   );
 
+  const handleImportCsv = useCallback(
+    async (file: File) => {
+      if (!userId) {
+        toast.error("Please sign in to import metadata");
+        return;
+      }
+
+      // Filter to active metaObjects only
+      const activeMetaObjects: MetaObject[] = (metaObjects ?? [])
+        .filter((mo) => mo.active)
+        .map((mo) => ({
+          _id: mo._id,
+          name: mo.name,
+          type: mo.type,
+          active: mo.active,
+          required: mo.required,
+          order: mo.order,
+        }));
+
+      if (activeMetaObjects.length === 0) {
+        toast.error(
+          "No active meta fields configured. Add meta fields in Settings > Meta Fields.",
+        );
+        return;
+      }
+
+      setImportState("importing");
+      setImportProgress({ current: 0, total: 0 });
+
+      // Initialize stats
+      const startTime = Date.now();
+      setImportStats({
+        created: 0,
+        updated: 0,
+        startTime,
+        totalRows: 0,
+        errors: [],
+      });
+
+      try {
+        // Read and parse CSV
+        const csvContent = await readCsvFile(file);
+        const { rows, errors: parseErrors } = parseAndValidateCsv(
+          csvContent,
+          activeMetaObjects,
+        );
+
+        if (rows.length === 0 && parseErrors.length > 0) {
+          // All rows failed validation
+          const errorMsg = formatImportErrors(parseErrors);
+          toast.error(errorMsg);
+          console.error("CSV parse errors:", parseErrors);
+          setImportState("idle");
+          setImportProgress(null);
+          setImportStats(null);
+          return;
+        }
+
+        // Update stats with total rows
+        setImportStats((prev) =>
+          prev
+            ? {
+                ...prev,
+                totalRows: rows.length,
+                errors: parseErrors.map((e) => `Row ${e.row}: ${e.message}`),
+              }
+            : null,
+        );
+
+        // Prepare values for bulk upsert
+        const values: Array<{
+          filename: string;
+          metaObjectId: Id<"metaObjects">;
+          value: string | number;
+        }> = [];
+
+        for (const row of rows) {
+          for (const val of row.values) {
+            values.push({
+              filename: row.filename,
+              metaObjectId: val.metaObjectId as Id<"metaObjects">,
+              value: val.value,
+            });
+          }
+        }
+
+        if (values.length > 0) {
+          // Batch upsert to Convex in chunks to avoid timeout
+          const BATCH_SIZE = 50;
+          const totalRows = rows.length;
+          setImportProgress({ current: 0, total: totalRows });
+
+          // Track unique filenames processed per batch for row count
+          let rowsProcessed = 0;
+          const processedFilenames = new Set<string>();
+          let totalCreated = 0;
+          let totalUpdated = 0;
+
+          for (let i = 0; i < values.length; i += BATCH_SIZE) {
+            const batch = values.slice(i, i + BATCH_SIZE);
+
+            // Count unique filenames in this batch (each filename = 1 row)
+            for (const val of batch) {
+              if (!processedFilenames.has(val.filename)) {
+                processedFilenames.add(val.filename);
+                rowsProcessed++;
+              }
+            }
+            setImportProgress({ current: rowsProcessed, total: totalRows });
+
+            const result = await bulkUpsertMetaValues({
+              values: batch,
+              userId,
+            });
+
+            // Accumulate created/updated counts
+            totalCreated += result.created;
+            totalUpdated += result.updated;
+
+            // Update stats with cumulative counts
+            setImportStats((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    created: totalCreated,
+                    updated: totalUpdated,
+                  }
+                : null,
+            );
+          }
+        }
+
+        // Finalize stats with end time
+        const endTime = Date.now();
+        setImportStats((prev) =>
+          prev
+            ? {
+                ...prev,
+                endTime,
+              }
+            : null,
+        );
+
+        // Show success/partial success toast
+        if (parseErrors.length === 0) {
+          toast.success(`Imported metadata for ${rows.length} rows`);
+        } else {
+          toast.success(
+            `Imported ${rows.length} rows, ${parseErrors.length} skipped`,
+          );
+          // Show details of errors
+          console.warn("Import parse errors:", parseErrors);
+        }
+
+        // Show done state
+        setImportState("done");
+
+        // Reset to idle after 10.5 seconds (after popover dismisses)
+        setTimeout(() => {
+          setImportState("idle");
+          setImportProgress(null);
+        }, 10500);
+      } catch (err) {
+        console.error("CSV import error:", err);
+        toast.error(
+          err instanceof Error ? err.message : "Failed to import CSV",
+        );
+        setImportState("idle");
+        setImportProgress(null);
+        setImportStats(null);
+      }
+    },
+    [userId, metaObjects, bulkUpsertMetaValues, setImportStats],
+  );
+
   const handleBulkOverwrite = useCallback(
     (caption: string) => {
       setImages((draft) => {
@@ -346,10 +548,31 @@ export function App() {
         captionedCount={captionedCount}
         saveStatus={saveStatus}
         onExport={handleExport}
+        onOpenImportModal={() => setIsImportModalOpen(true)}
         onShowSettings={() => setSettingsSection("general")}
         onBulkEdit={() => setIsBulkEditOpen(true)}
         onBulkUpscale={() => setIsBulkUpscaleOpen(true)}
         bulkUpscaleProgress={bulkUpscaleProgress}
+      />
+
+      <ImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportCsv={handleImportCsv}
+        onOpenMetaSettings={() => {
+          setIsImportModalOpen(false);
+          setSettingsSection("meta");
+        }}
+        activeMetaObjects={(metaObjects ?? [])
+          .filter((mo) => mo.active)
+          .map((mo) => ({
+            _id: mo._id,
+            name: mo.name,
+            type: mo.type,
+            active: mo.active,
+            required: mo.required,
+            order: mo.order,
+          }))}
       />
 
       <SettingsModal

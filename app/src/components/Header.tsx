@@ -1,7 +1,9 @@
-import { Fragment } from "react";
+import { Fragment, useState, useEffect, useRef } from "react";
+import { useAtomValue } from "jotai";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import {
   Download,
+  Upload,
   Image,
   Check,
   Loader2,
@@ -10,6 +12,11 @@ import {
   Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
+import {
+  importStateAtom,
+  importProgressAtom,
+  importStatsAtom,
+} from "../lib/store";
 
 type SaveStatus = "saving" | "saved" | null;
 type ExportFormat = "json" | "jsonl";
@@ -24,6 +31,7 @@ interface HeaderProps {
   captionedCount: number;
   saveStatus: SaveStatus;
   onExport: (format: ExportFormat) => void;
+  onOpenImportModal: () => void;
   onShowSettings: () => void;
   onBulkEdit: () => void;
   onBulkUpscale: () => void;
@@ -35,6 +43,7 @@ export function Header({
   captionedCount: _captionedCount,
   saveStatus,
   onExport,
+  onOpenImportModal,
   onShowSettings,
   onBulkEdit,
   onBulkUpscale,
@@ -46,6 +55,54 @@ export function Header({
   const progressPercent = isUpscaling
     ? (bulkUpscaleProgress.current / bulkUpscaleProgress.total) * 100
     : 0;
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Import state from Jotai
+  const importState = useAtomValue(importStateAtom);
+  const importProgress = useAtomValue(importProgressAtom);
+  const importStats = useAtomValue(importStatsAtom);
+
+  // Track "done" state visibility for animation (10 seconds)
+  const [showDone, setShowDone] = useState(false);
+  // Track popover visibility
+  const [showPopover, setShowPopover] = useState(false);
+
+  useEffect(() => {
+    if (importState === "done") {
+      setShowDone(true);
+      setShowPopover(true);
+      const timer = setTimeout(() => {
+        setShowDone(false);
+        setShowPopover(false);
+      }, 10000); // 10 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [importState]);
+
+  // Close popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(e.target as Node)
+      ) {
+        setShowPopover(false);
+      }
+    };
+
+    if (showPopover) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showPopover]);
+
+  const handleImportClick = () => {
+    // Always open modal, regardless of state
+    onOpenImportModal();
+  };
+
+  const isImporting = importState === "importing";
 
   return (
     <header className="bg-white border-b border-gray-200 shadow-sm">
@@ -135,6 +192,77 @@ export function Header({
               </Fragment>
             )}
           </Menu>
+
+          {/* Import button with popover */}
+          <div className="relative" ref={popoverRef}>
+            <button
+              type="button"
+              onMouseDownCapture={handleImportClick}
+              className={clsx(
+                "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all duration-300 cursor-pointer overflow-hidden",
+                showDone
+                  ? "bg-green-100 text-green-700"
+                  : isImporting
+                    ? "bg-primary/10 text-primary"
+                    : "text-gray-700 hover:bg-gray-100",
+              )}
+            >
+              <span
+                className={clsx(
+                  "flex items-center gap-2 transition-all duration-300",
+                  showDone && "animate-[scaleIn_0.3s_ease-out]",
+                )}
+              >
+                {showDone ? (
+                  <>
+                    <Check className="w-4 h-4 animate-[scaleIn_0.3s_ease-out]" />
+                    <span>Done</span>
+                  </>
+                ) : isImporting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="tabular-nums">
+                      {importProgress
+                        ? `${importProgress.current}/${importProgress.total}`
+                        : "0/0"}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    <span>Import CSV</span>
+                  </>
+                )}
+              </span>
+            </button>
+
+            {/* Done state popover */}
+            {showPopover && importStats && (
+              <div className="absolute top-full right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-50 animate-[fadeIn_0.2s_ease-out]">
+                <div className="flex items-center gap-2 text-green-600 mb-2">
+                  <Check className="w-4 h-4" />
+                  <span className="font-medium text-sm">Import complete</span>
+                </div>
+                <div className="text-sm text-gray-600 space-y-1">
+                  <p>
+                    <span className="font-medium text-green-600">
+                      {importStats.created}
+                    </span>{" "}
+                    new rows
+                  </p>
+                  <p>
+                    <span className="font-medium text-blue-600">
+                      {importStats.updated}
+                    </span>{" "}
+                    existing rows
+                  </p>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  Click button for details
+                </p>
+              </div>
+            )}
+          </div>
 
           <Menu as="div" className="relative">
             {({ open }) => (
