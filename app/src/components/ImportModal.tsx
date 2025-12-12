@@ -357,11 +357,9 @@ export function ImportModal({
     }
   };
 
-  // Don't allow closing during import
+  // Allow closing modal anytime - import continues in background
   const handleClose = () => {
-    if (importState !== "importing") {
-      onClose();
-    }
+    onClose();
   };
 
   return (
@@ -382,15 +380,13 @@ export function ImportModal({
             <DialogTitle className="text-lg font-semibold text-gray-900">
               {getTitle(importState)}
             </DialogTitle>
-            {importState !== "importing" && (
-              <button
-                type="button"
-                onMouseDownCapture={handleClose}
-                className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
+            <button
+              type="button"
+              onMouseDownCapture={handleClose}
+              className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
           {importState === "idle" && (
