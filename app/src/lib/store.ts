@@ -10,6 +10,7 @@ import type {
   BulkUpscaleProgress,
 } from "../types";
 import type { Settings, UpscaleProviderConfig } from "./settings";
+import { DEFAULT_CAPTION_MODEL_PRIORITY } from "./settings";
 
 // Default settings for atomWithStorage
 const DEFAULT_UPSCALE_PROVIDERS: UpscaleProviderConfig[] = [
@@ -23,6 +24,7 @@ const DEFAULT_SETTINGS: Settings = {
   allowDeletions: true,
   profileName: "",
   profileEmail: "",
+  captionModelPriority: DEFAULT_CAPTION_MODEL_PRIORITY,
 };
 
 // ============================================================================

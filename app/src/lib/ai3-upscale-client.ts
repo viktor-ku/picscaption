@@ -89,8 +89,29 @@ export interface ImageCapability {
   model: string;
 }
 
+/** Caption capability record */
+export interface CaptionCapability {
+  kind: "caption";
+  model: string;
+}
+
+/** Caption options */
+export interface CaptionOptions {
+  /** Model to use (default: "florence2-base") */
+  model?: "blip2" | "florence2-base" | "florence2-large";
+}
+
+/** Caption response */
+export interface CaptionResponse {
+  caption: string;
+  model: string;
+}
+
 /** Union of all capability types */
-export type Capability = UpscaleCapability | ImageCapability;
+export type Capability =
+  | UpscaleCapability
+  | ImageCapability
+  | CaptionCapability;
 
 /** Capabilities response */
 export interface CapabilitiesResponse {
@@ -297,6 +318,48 @@ export class UpscaleClient {
       reader.readAsDataURL(blob);
     });
   }
+
+  /**
+   * Generate a caption for an image
+   * @param image - Image file or Blob to caption
+   * @param options - Caption options
+   * @returns Caption response with generated text
+   */
+  async caption(
+    image: File | Blob,
+    options: CaptionOptions = {},
+  ): Promise<CaptionResponse> {
+    const formData = new FormData();
+
+    // Add image
+    if (image instanceof File) {
+      formData.append("image", image);
+    } else {
+      formData.append("image", image, "image.png");
+    }
+
+    // Add model parameter
+    if (options.model !== undefined) {
+      formData.append("model", options.model);
+    }
+
+    console.log(
+      "[UpscaleClient] Captioning with model:",
+      options.model ?? "florence2-base",
+    );
+
+    const response = await fetch(`${this.baseUrl}/api/caption`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error: ApiError = await response.json();
+      throw new UpscaleApiError(response.status, error.detail);
+    }
+
+    return response.json();
+  }
 }
 
 /** @deprecated Use UpscaleClient instead */
@@ -315,6 +378,11 @@ export function hasCapability(
 export function hasCapability(
   caps: CapabilitiesResponse,
   kind: "image",
+  options: { model: string },
+): boolean;
+export function hasCapability(
+  caps: CapabilitiesResponse,
+  kind: "caption",
   options: { model: string },
 ): boolean;
 export function hasCapability(
@@ -354,6 +422,17 @@ export function getImageCapabilities(
 }
 
 /**
+ * Get all caption capabilities
+ */
+export function getCaptionCapabilities(
+  caps: CapabilitiesResponse,
+): CaptionCapability[] {
+  return caps.capabilities.filter(
+    (c): c is CaptionCapability => c.kind === "caption",
+  );
+}
+
+/**
  * Check if upscaling at a specific scale is available
  */
 export function canUpscale(caps: CapabilitiesResponse, scale: 2 | 4): boolean {
@@ -368,6 +447,13 @@ export function canGenerate(
   model: string,
 ): boolean {
   return hasCapability(caps, "image", { model });
+}
+
+/**
+ * Check if captioning with a specific model is available
+ */
+export function canCaption(caps: CapabilitiesResponse, model: string): boolean {
+  return hasCapability(caps, "caption", { model });
 }
 
 export default UpscaleClient;

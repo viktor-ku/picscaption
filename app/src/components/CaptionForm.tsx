@@ -1,4 +1,4 @@
-import { FileImage } from "lucide-react";
+import { FileImage, Wand2, Loader2 } from "lucide-react";
 import type { ImageData } from "../types";
 
 interface CaptionFormProps {
@@ -6,6 +6,10 @@ interface CaptionFormProps {
   currentIndex: number;
   totalImages: number;
   onCaptionChange: (caption: string) => void;
+  onGenerateCaption: () => void;
+  isGeneratingCaption: boolean;
+  isCaptionAvailable: boolean;
+  onOpenCaptionSettings: () => void;
 }
 
 export function CaptionForm({
@@ -13,6 +17,10 @@ export function CaptionForm({
   currentIndex,
   totalImages,
   onCaptionChange,
+  onGenerateCaption,
+  isGeneratingCaption,
+  isCaptionAvailable,
+  onOpenCaptionSettings,
 }: CaptionFormProps) {
   if (!selectedImage) {
     return (
@@ -62,12 +70,38 @@ export function CaptionForm({
         </div>
 
         <div className="flex-1 flex flex-col">
-          <label
-            htmlFor="caption"
-            className="block text-sm font-medium text-gray-700 mb-1"
-          >
-            Caption
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label
+              htmlFor="caption"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Caption
+            </label>
+            <button
+              type="button"
+              onClick={
+                isCaptionAvailable ? onGenerateCaption : onOpenCaptionSettings
+              }
+              disabled={isGeneratingCaption}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                isCaptionAvailable
+                  ? "bg-purple-100 text-purple-700 hover:bg-purple-200"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
+              title={
+                isCaptionAvailable
+                  ? "Generate caption with AI"
+                  : "No caption models available - click to configure"
+              }
+            >
+              {isGeneratingCaption ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Wand2 className="w-3.5 h-3.5" />
+              )}
+              AI
+            </button>
+          </div>
           <textarea
             id="caption"
             value={selectedImage.caption}

@@ -6,8 +6,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routes import generate_router, health_router, upscale_router
+from routes import caption_router, generate_router, health_router, upscale_router
 from services.capabilities import get_capabilities
+from services.captioner import captioner
 from services.generator import generator
 from services.queue import gpu_queue
 from services.upscaler import upscaler
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI):
     # Extract capability lists
     upscale_caps = [c for c in caps["capabilities"] if c["kind"] == "upscale"]
     image_caps = [c for c in caps["capabilities"] if c["kind"] == "image"]
+    caption_caps = [c for c in caps["capabilities"] if c["kind"] == "caption"]
 
     # Preload models based on capabilities
     if upscale_caps:
@@ -40,6 +42,11 @@ async def lifespan(app: FastAPI):
         logger.info("Preloading generation models...")
         models = [c["model"] for c in image_caps]
         await generator.load(models)
+
+    if caption_caps:
+        logger.info("Preloading caption models...")
+        models = [c["model"] for c in caption_caps]
+        await captioner.load(models)
 
     await gpu_queue.start()
     logger.info("AI server ready")
@@ -71,3 +78,4 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(upscale_router)
 app.include_router(generate_router)
+app.include_router(caption_router)

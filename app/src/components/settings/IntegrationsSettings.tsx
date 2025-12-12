@@ -6,14 +6,16 @@ import {
   Server,
   Cloud,
   Zap,
+  MessageSquare,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import {
   UpscaleClient,
   type CapabilitiesResponse,
-  type Capability,
 } from "../../lib/ai3-upscale-client";
 import { StabilityUpscaleClient } from "../../lib/stability-upscale-client";
+import { OpenRouterClient } from "../../lib/openrouter-client";
 import type { Settings } from "../../lib/settings";
 
 interface IntegrationsSettingsProps {
@@ -160,6 +162,7 @@ export function IntegrationsSettings({
   onSettingsChange,
 }: IntegrationsSettingsProps) {
   const [ai3Url, setAi3Url] = useState(settings.upscaleServerUrl);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   // AI3 client
   const ai3Client = useMemo(() => {
@@ -202,10 +205,42 @@ export function IntegrationsSettings({
     staleTime: 30000,
   });
 
-  const handleAi3UrlSave = () => {
+  // OpenRouter client - uses server's API key
+  const openRouterClient = useMemo(() => new OpenRouterClient(), []);
+
+  const { data: openRouterActive, isLoading: openRouterLoading } = useQuery({
+    queryKey: ["openrouter-status"],
+    queryFn: () => openRouterClient.ping(),
+    retry: false,
+    staleTime: 30000,
+  });
+
+  const handleAi3UrlSave = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     const trimmedUrl = ai3Url.trim();
+
+    if (!trimmedUrl) {
+      onSettingsChange({ ...settings, upscaleServerUrl: "" });
+      return;
+    }
+
+    setIsConnecting(true);
     onSettingsChange({ ...settings, upscaleServerUrl: trimmedUrl });
-    setTimeout(() => refetchAi3(), 100);
+
+    // Wait a bit for settings to propagate, then refetch
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const result = await refetchAi3();
+
+    // Ensure spinner shows for at least 300ms for visual feedback
+    setTimeout(() => {
+      setIsConnecting(false);
+      if (result.data) {
+        toast.success("Connected to ai3 server");
+      } else {
+        toast.error("Server not available");
+      }
+    }, 200);
   };
 
   const ai3Status = ai3Loading
@@ -216,6 +251,11 @@ export function IntegrationsSettings({
   const stabilityStatus = stabilityLoading
     ? "checking"
     : stabilityActive
+      ? "active"
+      : "not-configured";
+  const openRouterStatus = openRouterLoading
+    ? "checking"
+    : openRouterActive
       ? "active"
       : "not-configured";
 
@@ -259,10 +299,15 @@ export function IntegrationsSettings({
               />
               <button
                 type="button"
-                onClick={handleAi3UrlSave}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-hover rounded-lg transition-colors"
+                onMouseDownCapture={handleAi3UrlSave}
+                disabled={isConnecting}
+                className="min-w-[5.5rem] px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-hover rounded-lg transition-colors cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center"
               >
-                Connect
+                {isConnecting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Connect"
+                )}
               </button>
             </div>
           </div>
@@ -339,6 +384,79 @@ export function IntegrationsSettings({
             <p className="text-sm text-gray-500">
               Stability AI integration is managed by the server. Contact support
               if you need access.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* OpenRouter */}
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white rounded-lg border border-gray-200">
+                <MessageSquare className="w-5 h-5 text-purple-500" />
+              </div>
+              <div>
+                <h3 className="font-medium text-gray-900">OpenRouter</h3>
+                <p className="text-xs text-gray-500">
+                  Cloud-based AI captioning (GPT-4o, Claude, Gemini)
+                </p>
+              </div>
+            </div>
+            <StatusBadge status={openRouterStatus} />
+          </div>
+        </div>
+
+        <div className="p-4">
+          {openRouterActive ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-green-600">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Connected via server API key</span>
+              </div>
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Capability
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Models
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                        Details
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4 text-purple-500" />
+                          <span className="font-medium text-gray-900">
+                            Caption
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-gray-600">
+                        GPT-4o, Claude 3, Gemini
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">
+                          vision
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">
+              OpenRouter integration is managed by the server. Set
+              OPENROUTER_API_KEY in the server environment.
             </p>
           )}
         </div>

@@ -3,3 +3,4 @@ export { UpscaleSettings } from "./UpscaleSettings";
 export { ProfileSettings } from "./ProfileSettings";
 export { MetaFieldsSettings } from "./MetaFieldsSettings";
 export { IntegrationsSettings } from "./IntegrationsSettings";
+export { CaptionerSettings } from "./CaptionerSettings";

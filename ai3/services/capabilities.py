@@ -34,7 +34,14 @@ class ImageCapability(TypedDict):
     model: str
 
 
-Capability = UpscaleCapability | ImageCapability
+class CaptionCapability(TypedDict):
+    """Caption capability record."""
+
+    kind: Literal["caption"]
+    model: str
+
+
+Capability = UpscaleCapability | ImageCapability | CaptionCapability
 
 
 class CapabilitiesResponse(TypedDict):
@@ -81,6 +88,8 @@ def get_capabilities() -> CapabilitiesResponse:
             {"kind": "upscale", "model": "realesrgan-x2plus", "scale": 2},
             {"kind": "upscale", "model": "realesrgan-x4plus", "scale": 4},
             {"kind": "image", "model": "sdxl"},
+            {"kind": "caption", "model": "blip2"},
+            {"kind": "caption", "model": "florence2-base"},
         ]
         return {
             "capabilities": capabilities,
@@ -91,8 +100,11 @@ def get_capabilities() -> CapabilitiesResponse:
     # GPU mode: based on VRAM
     if mem >= 4:
         capabilities.append({"kind": "upscale", "model": "realesrgan-x2plus", "scale": 2})
+        capabilities.append({"kind": "caption", "model": "blip2"})
+        capabilities.append({"kind": "caption", "model": "florence2-base"})
     if mem >= 6:
         capabilities.append({"kind": "upscale", "model": "realesrgan-x4plus", "scale": 4})
+        capabilities.append({"kind": "caption", "model": "florence2-large"})
     if mem >= 8:
         capabilities.append({"kind": "image", "model": "sdxl"})
     if mem >= 12:
@@ -134,5 +146,15 @@ def require_generate(model: str) -> None:
         caps = get_capabilities()
         raise ValueError(
             f"Image generation with {model} not available. "
+            f"Device: {caps['device']}, VRAM: {caps['gpu_memory_gb']} GB"
+        )
+
+
+def require_caption(model: str) -> None:
+    """Raise ValueError if caption model unavailable."""
+    if not has_capability("caption", model=model):
+        caps = get_capabilities()
+        raise ValueError(
+            f"Captioning with {model} not available. "
             f"Device: {caps['device']}, VRAM: {caps['gpu_memory_gb']} GB"
         )

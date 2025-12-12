@@ -19,6 +19,7 @@
     "@dnd-kit/sortable": "10.0.0",
     "@dnd-kit/utilities": "3.2.2",
     "@headlessui/react": "2.2.9",
+    "@openrouter/sdk": "0.2.11",
     "@tanstack/react-query": "5.90.12",
     "astro": "5.16.5",
     "clsx": "2.1.1",

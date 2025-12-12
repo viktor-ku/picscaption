@@ -13,12 +13,14 @@ import {
   ProfileSettings,
   MetaFieldsSettings,
   IntegrationsSettings,
+  CaptionerSettings,
 } from "./settings";
 import type { Id } from "../../convex/_generated/dataModel";
 
 export type SettingsSection =
   | "general"
   | "integrations"
+  | "captioner"
   | "upscale"
   | "meta"
   | "profile";
@@ -37,6 +39,7 @@ interface SettingsModalProps {
 const SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: "general", label: "General" },
   { id: "integrations", label: "Integrations" },
+  { id: "captioner", label: "Captioner" },
   { id: "upscale", label: "Upscale" },
   { id: "meta", label: "Metaobjects" },
   { id: "profile", label: "Profile" },
@@ -150,6 +153,13 @@ export function SettingsModal({
 
                 {activeSection === "integrations" && (
                   <IntegrationsSettings
+                    settings={settings}
+                    onSettingsChange={onSettingsChange}
+                  />
+                )}
+
+                {activeSection === "captioner" && (
+                  <CaptionerSettings
                     settings={settings}
                     onSettingsChange={onSettingsChange}
                   />

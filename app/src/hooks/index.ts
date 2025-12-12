@@ -9,3 +9,4 @@ export { useKeyboardNavigation } from "./useKeyboardNavigation";
 export { useFileHandling } from "./useFileHandling";
 export { useBulkUpscale } from "./useBulkUpscale";
 export { useUser, type UseUserReturn } from "./useUser";
+export { useCaption, type UseCaptionResult } from "./useCaption";
