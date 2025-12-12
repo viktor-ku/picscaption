@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ImageData } from "../types";
-import { UpscaleClient } from "../lib/ai3-upscale-client";
+import {
+  UpscaleClient,
+  getUpscaleCapabilities,
+} from "../lib/ai3-upscale-client";
 import { StabilityUpscaleClient } from "../lib/stability-upscale-client";
 import type { UpscaleProviderConfig } from "../lib/settings";
 import { resizeImage } from "../lib/image-utils";
@@ -36,7 +39,6 @@ interface UseUpscaleOptions {
   selectedImage: ImageData | null;
   upscaleProviders: UpscaleProviderConfig[];
   upscaleServerUrl?: string;
-  stabilityApiKey?: string;
   onUpscaleConfirm?: (
     imageId: string,
     newBlob: Blob,
@@ -49,7 +51,6 @@ export function useUpscale({
   selectedImage,
   upscaleProviders,
   upscaleServerUrl,
-  stabilityApiKey,
   onUpscaleConfirm,
 }: UseUpscaleOptions) {
   const [upscaleData, setUpscaleData] = useState<UpscaleData>({
@@ -86,14 +87,14 @@ export function useUpscale({
 
   // Create Stability client as memoized value
   const stabilityClient = useMemo(() => {
-    const key = stabilityApiKey?.trim();
-    return new StabilityUpscaleClient(key || undefined);
-  }, [stabilityApiKey]);
+    return new StabilityUpscaleClient();
+  }, []);
 
   // Check if providers are enabled
   const ai3Enabled = enabledProviders.some((p) => p.id === "ai3");
   const stabilityEnabled = enabledProviders.some((p) => p.id === "stability");
 
+  // Query for AI3 server capabilities
   // Query for AI3 server capabilities
   const { data: ai3Capabilities } = useQuery({
     queryKey: ["upscale-server-capabilities", upscaleServerUrl],
@@ -101,8 +102,10 @@ export function useUpscale({
       if (!ai3Client) return null;
       try {
         await ai3Client.ping();
-        const { capabilities } = await ai3Client.capabilities();
-        return capabilities;
+        const caps = await ai3Client.capabilities();
+        // Extract scales from upscale capabilities
+        const upscaleCaps = getUpscaleCapabilities(caps);
+        return upscaleCaps.map((c) => c.scale);
       } catch {
         return null;
       }
@@ -114,7 +117,7 @@ export function useUpscale({
 
   // Query for Stability API availability
   const { data: stabilityAvailable } = useQuery({
-    queryKey: ["stability-server-status", stabilityApiKey],
+    queryKey: ["stability-server-status"],
     queryFn: async () => {
       return stabilityClient.ping();
     },
@@ -308,7 +311,7 @@ export function useUpscale({
         });
         // Re-check server availability
         queryClient.invalidateQueries({
-          queryKey: ["stability-server-status", stabilityApiKey],
+          queryKey: ["stability-server-status"],
         });
         queryClient.invalidateQueries({
           queryKey: ["upscale-server-capabilities", upscaleServerUrl],
@@ -320,7 +323,6 @@ export function useUpscale({
       currentUpscaleData.state,
       enabledProviders,
       tryUpscaleWithProviders,
-      stabilityApiKey,
       upscaleServerUrl,
       queryClient,
     ],
@@ -484,7 +486,7 @@ export function useUpscale({
           error: err instanceof Error ? err.message : "Resize failed",
         });
         queryClient.invalidateQueries({
-          queryKey: ["stability-server-status", stabilityApiKey],
+          queryKey: ["stability-server-status"],
         });
         queryClient.invalidateQueries({
           queryKey: ["upscale-server-capabilities", upscaleServerUrl],
@@ -496,7 +498,6 @@ export function useUpscale({
       currentUpscaleData.state,
       enabledProviders,
       tryUpscaleWithFallback,
-      stabilityApiKey,
       upscaleServerUrl,
       queryClient,
     ],

@@ -27,9 +27,8 @@ export function useBulkUpscale({
   }, [settings.upscaleServerUrl]);
 
   const stabilityUpscaleClient = useMemo(() => {
-    const key = settings.stabilityApiKey?.trim();
-    return new StabilityUpscaleClient(key || undefined);
-  }, [settings.stabilityApiKey]);
+    return new StabilityUpscaleClient();
+  }, []);
 
   const tryUpscaleWithFallback = useCallback(
     async (

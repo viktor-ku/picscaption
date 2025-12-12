@@ -7,3 +7,8 @@ run = [
 run = [
   "cd app && bunx convex dev",
 ]
+
+[tasks."ai3:up"]
+run = [
+  "docker compose up -d ai3",
+]

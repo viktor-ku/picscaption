@@ -1,0 +1,21 @@
+services:
+  ai3:
+    build: ./ai3
+    ports:
+      - "3001:3001"
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      # Optional: Override GPU memory detection (in GB)
+      # Useful for reserving memory for other processes
+      # - GPU_MEMORY_GB=8
+    restart: unless-stopped
+

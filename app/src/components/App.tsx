@@ -192,7 +192,7 @@ export function App() {
   });
 
   useQuery({
-    queryKey: ["stability-server-status", settings.stabilityApiKey],
+    queryKey: ["stability-server-status"],
     queryFn: () => stabilityUpscaleClient.ping(),
     retry: false,
   });
@@ -661,7 +661,6 @@ export function App() {
                 onCropConfirm={handleCropConfirm}
                 upscaleProviders={settings.upscaleProviders}
                 upscaleServerUrl={settings.upscaleServerUrl}
-                stabilityApiKey={settings.stabilityApiKey}
                 hasPendingCrop={
                   pendingCrop !== null &&
                   pendingCrop.imageId === selectedImage?.id

@@ -29,7 +29,6 @@ interface ImagePreviewProps {
   ) => Promise<void>;
   upscaleProviders?: UpscaleProviderConfig[];
   upscaleServerUrl?: string;
-  stabilityApiKey?: string;
   hasPendingCrop?: boolean;
   onCancelCrop?: () => void;
   onCropModeChange?: (isCropping: boolean) => void;
@@ -41,7 +40,6 @@ export function ImagePreview({
   onCropConfirm,
   upscaleProviders = [],
   upscaleServerUrl,
-  stabilityApiKey,
   hasPendingCrop,
   onCancelCrop,
   onCropModeChange,
@@ -70,7 +68,6 @@ export function ImagePreview({
     selectedImage,
     upscaleProviders,
     upscaleServerUrl,
-    stabilityApiKey,
     onUpscaleConfirm,
   });
 

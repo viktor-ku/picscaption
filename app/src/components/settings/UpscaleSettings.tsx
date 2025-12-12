@@ -1,13 +1,6 @@
-import { useState, useMemo } from "react";
-import {
-  Loader2,
-  CheckCircle2,
-  GripVertical,
-  Settings2,
-  AlertCircle,
-} from "lucide-react";
-import toast from "react-hot-toast";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { CheckCircle2, GripVertical, AlertCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import {
   DndContext,
   closestCenter,
@@ -35,32 +28,17 @@ import {
 } from "../../lib/settings";
 import { Toggle } from "../Toggle";
 
-/** Check if a string is a valid URL */
-function isValidUrl(urlString: string): boolean {
-  if (!urlString.trim()) return false;
-  try {
-    const url = new URL(urlString.trim());
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
 // Sortable provider item component
 interface SortableProviderItemProps {
   provider: UpscaleProviderConfig;
-  isConfigOpen: boolean;
   status: "ready" | "not-configured" | "unavailable";
   onToggleEnabled: (enabled: boolean) => void;
-  onConfigClick: () => void;
 }
 
 function SortableProviderItem({
   provider,
-  isConfigOpen,
   status,
   onToggleEnabled,
-  onConfigClick,
 }: SortableProviderItemProps) {
   const {
     attributes,
@@ -84,7 +62,7 @@ function SortableProviderItem({
       style={style}
       className={`flex items-center gap-3 p-3 bg-white border rounded-lg ${
         isDragging ? "shadow-lg border-primary" : "border-gray-200"
-      } ${isConfigOpen ? "ring-2 ring-primary/30" : ""}`}
+      }`}
     >
       {/* Drag handle */}
       <button
@@ -129,19 +107,6 @@ function SortableProviderItem({
         label=""
         size="sm"
       />
-
-      {/* Config gear icon */}
-      <button
-        type="button"
-        onMouseDownCapture={onConfigClick}
-        className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-          isConfigOpen
-            ? "text-primary bg-primary/10"
-            : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-        }`}
-      >
-        <Settings2 className="w-4 h-4" />
-      </button>
     </div>
   );
 }
@@ -155,14 +120,6 @@ export function UpscaleSettings({
   settings,
   onSettingsChange,
 }: UpscaleSettingsProps) {
-  const [upscaleUrl, setUpscaleUrl] = useState(settings.upscaleServerUrl);
-  const [stabilityApiKey, setStabilityApiKey] = useState(
-    settings.stabilityApiKey,
-  );
-  const [openConfigProvider, setOpenConfigProvider] =
-    useState<UpscaleProvider | null>(null);
-  const queryClient = useQueryClient();
-
   // DnD sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -171,50 +128,8 @@ export function UpscaleSettings({
     }),
   );
 
-  // Memoized URL validation
-  const urlIsValid = useMemo(() => isValidUrl(upscaleUrl), [upscaleUrl]);
-
-  // Mutation for connecting to AI3 upscale server
-  const connectMutation = useMutation({
-    mutationFn: async (url: string) => {
-      const client = new UpscaleClient(url);
-      return client.ping();
-    },
-    onSuccess: () => {
-      const trimmedUrl = upscaleUrl.trim();
-      onSettingsChange({ ...settings, upscaleServerUrl: trimmedUrl });
-      queryClient.invalidateQueries({ queryKey: ["upscale-server-status"] });
-      toast.success("Connected to AI3 server");
-    },
-    onError: () => {
-      toast.error("Server unavailable");
-    },
-  });
-
-  // Mutation for testing Stability AI connection
-  const stabilityConnectMutation = useMutation({
-    mutationFn: async (apiKey: string) => {
-      const client = new StabilityUpscaleClient(apiKey || undefined);
-      const ready = await client.ping();
-      if (!ready) {
-        throw new Error("API key not configured or invalid");
-      }
-      return ready;
-    },
-    onSuccess: () => {
-      const trimmedKey = stabilityApiKey.trim();
-      onSettingsChange({ ...settings, stabilityApiKey: trimmedKey });
-      queryClient.invalidateQueries({ queryKey: ["stability-server-status"] });
-      toast.success("Stability AI connected");
-    },
-    onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Connection failed");
-    },
-  });
-
   // Check AI3 server status
-  const hasConfiguredUrl = Boolean(settings.upscaleServerUrl?.trim());
-  const upscaleClient = useMemo(() => {
+  const ai3Client = useMemo(() => {
     const url = settings.upscaleServerUrl?.trim();
     if (url) {
       return new UpscaleClient(url);
@@ -225,25 +140,20 @@ export function UpscaleSettings({
   const { data: isAi3Connected } = useQuery({
     queryKey: ["upscale-server-status", settings.upscaleServerUrl],
     queryFn: async () => {
-      if (!upscaleClient) return false;
-      await upscaleClient.ping();
+      if (!ai3Client) return false;
+      await ai3Client.ping();
       return true;
     },
-    enabled: hasConfiguredUrl && upscaleClient !== null,
+    enabled: Boolean(settings.upscaleServerUrl?.trim()) && ai3Client !== null,
     retry: false,
   });
 
   // Check Stability AI status
-  const stabilityClient = useMemo(() => {
-    const key = settings.stabilityApiKey?.trim();
-    return new StabilityUpscaleClient(key || undefined);
-  }, [settings.stabilityApiKey]);
+  const stabilityClient = useMemo(() => new StabilityUpscaleClient(), []);
 
   const { data: isStabilityConnected } = useQuery({
-    queryKey: ["stability-server-status", settings.stabilityApiKey],
-    queryFn: async () => {
-      return stabilityClient.ping();
-    },
+    queryKey: ["stability-server-status"],
+    queryFn: () => stabilityClient.ping(),
     retry: false,
   });
 
@@ -256,21 +166,7 @@ export function UpscaleSettings({
       return isAi3Connected ? "ready" : "unavailable";
     }
     if (isStabilityConnected) return "ready";
-    if (!settings.stabilityApiKey?.trim()) return "not-configured";
-    return "unavailable";
-  };
-
-  const canConnect = urlIsValid && !connectMutation.isPending;
-  const canConnectStability = !stabilityConnectMutation.isPending;
-
-  const handleConnect = () => {
-    if (!canConnect) return;
-    connectMutation.mutate(upscaleUrl.trim());
-  };
-
-  const handleStabilityConnect = () => {
-    if (!canConnectStability) return;
-    stabilityConnectMutation.mutate(stabilityApiKey.trim());
+    return "not-configured";
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -304,152 +200,42 @@ export function UpscaleSettings({
   };
 
   return (
-    <>
-      {/* Section description */}
+    <div className="space-y-4">
       <div className="space-y-2">
         <p className="text-sm text-gray-600">
-          Configure upscaling providers. Drag to reorder priority - enabled
-          providers are tried in order from top to bottom.
+          Drag to set priority order. When upscaling, the first enabled and
+          available provider will be used.
+        </p>
+        <p className="text-xs text-gray-500">
+          Configure integrations in the{" "}
+          <span className="font-medium">Integrations</span> section.
         </p>
       </div>
 
       {/* Provider list */}
-      <div className="space-y-3">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={settings.upscaleProviders.map((p) => p.id)}
+          strategy={verticalListSortingStrategy}
         >
-          <SortableContext
-            items={settings.upscaleProviders.map((p) => p.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-2">
-              {settings.upscaleProviders.map((provider) => (
-                <SortableProviderItem
-                  key={provider.id}
-                  provider={provider}
-                  isConfigOpen={openConfigProvider === provider.id}
-                  status={getProviderStatus(provider.id)}
-                  onToggleEnabled={(enabled) =>
-                    handleToggleProvider(provider.id, enabled)
-                  }
-                  onConfigClick={() =>
-                    setOpenConfigProvider(
-                      openConfigProvider === provider.id ? null : provider.id,
-                    )
-                  }
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-      </div>
-
-      {/* Config panel */}
-      {openConfigProvider === "ai3" && (
-        <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
-          <h4 className="text-sm font-medium text-gray-900">
-            AI3 Daemon Configuration
-          </h4>
           <div className="space-y-2">
-            <label
-              htmlFor="upscale-server-url"
-              className="block text-sm text-gray-700"
-            >
-              Server URL
-            </label>
-            <div className="flex gap-2">
-              <input
-                id="upscale-server-url"
-                type="url"
-                value={upscaleUrl}
-                onChange={(e) => setUpscaleUrl(e.target.value)}
-                placeholder="http://localhost:3000"
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+            {settings.upscaleProviders.map((provider) => (
+              <SortableProviderItem
+                key={provider.id}
+                provider={provider}
+                status={getProviderStatus(provider.id)}
+                onToggleEnabled={(enabled) =>
+                  handleToggleProvider(provider.id, enabled)
+                }
               />
-              {connectMutation.isPending ? (
-                <div className="px-4 py-2 text-sm font-medium text-white bg-gray-400 rounded-lg flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onMouseDownCapture={handleConnect}
-                  disabled={!canConnect}
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-hover disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
-                >
-                  Connect
-                </button>
-              )}
-            </div>
-            {upscaleUrl.trim() && !urlIsValid && (
-              <p className="text-xs text-red-500">
-                Enter a valid URL (e.g., http://localhost:3000)
-              </p>
-            )}
-            {isAi3Connected && (
-              <div className="flex items-center gap-1.5 text-green-600">
-                <CheckCircle2 className="w-4 h-4" />
-                <span className="text-sm font-medium">Connected</span>
-              </div>
-            )}
-            <p className="text-xs text-gray-500">
-              URL of the AI3 upscale daemon. Supports 2x and 4x upscaling.
-            </p>
+            ))}
           </div>
-        </div>
-      )}
-
-      {openConfigProvider === "stability" && (
-        <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
-          <h4 className="text-sm font-medium text-gray-900">
-            Stability AI Configuration
-          </h4>
-          <div className="space-y-2">
-            <label
-              htmlFor="stability-api-key"
-              className="block text-sm text-gray-700"
-            >
-              API Key
-            </label>
-            <div className="flex gap-2">
-              <input
-                id="stability-api-key"
-                type="password"
-                value={stabilityApiKey}
-                onChange={(e) => setStabilityApiKey(e.target.value)}
-                placeholder="sk-... (optional if server has env key)"
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-              />
-              {stabilityConnectMutation.isPending ? (
-                <div className="px-4 py-2 text-sm font-medium text-white bg-gray-400 rounded-lg flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onMouseDownCapture={handleStabilityConnect}
-                  disabled={!canConnectStability}
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-hover disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
-                >
-                  Test
-                </button>
-              )}
-            </div>
-            {isStabilityConnected && (
-              <div className="flex items-center gap-1.5 text-green-600">
-                <CheckCircle2 className="w-4 h-4" />
-                <span className="text-sm font-medium">Ready</span>
-              </div>
-            )}
-            <p className="text-xs text-gray-500">
-              Your Stability AI API key. Leave empty to use server environment
-              variable. Fast upscale is always 4x.
-            </p>
-          </div>
-        </div>
-      )}
-    </>
+        </SortableContext>
+      </DndContext>
+    </div>
   );
 }

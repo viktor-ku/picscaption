@@ -12,10 +12,16 @@ import {
   UpscaleSettings,
   ProfileSettings,
   MetaFieldsSettings,
+  IntegrationsSettings,
 } from "./settings";
 import type { Id } from "../../convex/_generated/dataModel";
 
-export type SettingsSection = "general" | "upscale" | "meta" | "profile";
+export type SettingsSection =
+  | "general"
+  | "integrations"
+  | "upscale"
+  | "meta"
+  | "profile";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -30,6 +36,7 @@ interface SettingsModalProps {
 
 const SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: "general", label: "General" },
+  { id: "integrations", label: "Integrations" },
   { id: "upscale", label: "Upscale" },
   { id: "meta", label: "Metaobjects" },
   { id: "profile", label: "Profile" },
@@ -138,6 +145,13 @@ export function SettingsModal({
                   <GeneralSettings
                     settings={settings}
                     onAllowDeletionsChange={handleAllowDeletionsChange}
+                  />
+                )}
+
+                {activeSection === "integrations" && (
+                  <IntegrationsSettings
+                    settings={settings}
+                    onSettingsChange={onSettingsChange}
                   />
                 )}
 

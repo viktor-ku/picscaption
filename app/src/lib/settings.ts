@@ -25,7 +25,6 @@ export const UPSCALE_PROVIDER_INFO: Record<
 export interface Settings {
   upscaleProviders: UpscaleProviderConfig[];
   upscaleServerUrl: string;
-  stabilityApiKey: string;
   allowDeletions: boolean;
   profileName: string;
   profileEmail: string;

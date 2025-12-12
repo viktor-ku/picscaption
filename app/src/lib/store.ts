@@ -20,7 +20,6 @@ const DEFAULT_UPSCALE_PROVIDERS: UpscaleProviderConfig[] = [
 const DEFAULT_SETTINGS: Settings = {
   upscaleProviders: DEFAULT_UPSCALE_PROVIDERS,
   upscaleServerUrl: "",
-  stabilityApiKey: "",
   allowDeletions: true,
   profileName: "",
   profileEmail: "",

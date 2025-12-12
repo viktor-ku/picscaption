@@ -1,0 +1,47 @@
+[project]
+name = "ai3"
+version = "0.1.0"
+description = "AI Image Upscaling and Generation Server"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.12",
+    "pydantic-settings>=2.6.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "spandrel>=0.4.0",
+    "diffusers @ git+https://github.com/huggingface/diffusers.git@17c0e79dbdf53fb6705e9c09cc1a854b84c39249",
+    "transformers>=4.46.0",
+    "accelerate>=1.1.0",
+    "pillow>=10.0.0",
+    "opencv-python>=4.8.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "B",
+    "C4",
+    "UP",
+    "SIM",
+]
+ignore = [
+    "E501",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+

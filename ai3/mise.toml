@@ -1,0 +1,20 @@
+[tools]
+uv = "latest"
+python = "3.12"
+
+[tasks.dev]
+run = "uv run uvicorn main:app --reload --host 0.0.0.0 --port 3001"
+
+[tasks.start]
+run = "uv run uvicorn main:app --host 0.0.0.0 --port 3001"
+
+[tasks.lint]
+run = "uv run ruff check ."
+
+[tasks.format]
+run = "uv run ruff format ."
+
+[tasks.fix]
+run = ["uv run ruff check --fix .", "uv run ruff format ."]
+description = "Fix lint errors and format code"
+

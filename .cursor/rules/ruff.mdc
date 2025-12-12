@@ -1,0 +1,7 @@
+---
+description: Format ai3 Python code with ruff after changes
+globs: ai3/**/*.py
+alwaysApply: true
+---
+
+Run `cd ai3 && mise exec -- uv run ruff format . && mise exec -- uv run ruff check --fix .` after all changes to ai3/ to apply correct formatting.

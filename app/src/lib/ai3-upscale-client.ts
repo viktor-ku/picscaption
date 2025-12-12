@@ -1,23 +1,37 @@
 /**
- * AI Image Upscaler Client
+ * AI Image Upscaler & Generator Client
  *
- * TypeScript client for the ai3-upscale daemon API.
+ * TypeScript client for the ai-server API.
  *
  * @example
  * ```ts
- * import { UpscaleClient } from './client';
+ * import { AIClient, canUpscale, canGenerate } from './ai3-upscale-client';
  *
- * const client = new UpscaleClient('http://localhost:3000');
+ * const client = new AIClient('http://localhost:3001');
  *
  * // Health check
  * const status = await client.ping();
  *
- * // Get available upscale methods
- * const { capabilities } = await client.capabilities(); // e.g. [2, 4]
+ * // Get available capabilities
+ * const caps = await client.capabilities();
+ * // {
+ * //   capabilities: [
+ * //     { kind: "upscale", model: "realesrgan-x2plus", scale: 2 },
+ * //     { kind: "upscale", model: "realesrgan-x4plus", scale: 4 },
+ * //     { kind: "image", model: "sdxl" }
+ * //   ],
+ * //   device: "cuda",
+ * //   gpu_memory_gb: 8
+ * // }
  *
- * // Upscale an image
- * const file = new File([imageBytes], 'image.png', { type: 'image/png' });
- * const upscaled = await client.upscale(file, { scale: 4, prompt: 'high quality' });
+ * // Check capabilities
+ * if (canUpscale(caps, 4)) {
+ *   const upscaled = await client.upscale(file, { scale: 4 });
+ * }
+ *
+ * if (canGenerate(caps, "sdxl")) {
+ *   const generated = await client.generate({ prompt: "a beautiful sunset" });
+ * }
  * ```
  */
 
@@ -37,14 +51,55 @@ export interface UpscaleOptions {
   guidance?: number;
 }
 
+/** Image generation options */
+export interface GenerateOptions {
+  /** Text prompt for generation */
+  prompt: string;
+  /** Things to avoid in output */
+  negativePrompt?: string;
+  /** Image width (default: 1024) */
+  width?: number;
+  /** Image height (default: 1024) */
+  height?: number;
+  /** Random seed, 0 = random (default: 0) */
+  seed?: number;
+  /** Number of inference steps, 1-100 (default: 30) */
+  steps?: number;
+  /** Guidance scale, 0-20 (default: 7.5) */
+  guidance?: number;
+  /** Model to use (default: "sdxl") */
+  model?: "sdxl" | "flux";
+}
+
 /** Ping response */
 export interface PingResponse {
   status: string;
 }
 
+/** Upscale capability record */
+export interface UpscaleCapability {
+  kind: "upscale";
+  model: string;
+  scale: 2 | 4;
+}
+
+/** Image generation capability record */
+export interface ImageCapability {
+  kind: "image";
+  model: string;
+}
+
+/** Union of all capability types */
+export type Capability = UpscaleCapability | ImageCapability;
+
 /** Capabilities response */
 export interface CapabilitiesResponse {
-  capabilities: (2 | 4)[];
+  /** List of available capabilities */
+  capabilities: Capability[];
+  /** Compute device being used */
+  device: "cuda" | "cpu";
+  /** Detected GPU memory in GB (0 for CPU mode) */
+  gpu_memory_gb: number;
 }
 
 /** API error response */
@@ -64,26 +119,26 @@ export class UpscaleApiError extends Error {
 }
 
 /**
- * Client for the AI Image Upscaler daemon
+ * Client for the AI Image Server
  */
 export class UpscaleClient {
   private readonly baseUrl: string;
 
   /**
    * Create a new client
-   * @param baseUrl - Base URL of the daemon (e.g., "http://localhost:3000")
+   * @param baseUrl - Base URL of the server (e.g., "http://localhost:3001")
    */
-  constructor(baseUrl: string = "http://localhost:3000") {
+  constructor(baseUrl: string = "http://localhost:3001") {
     // Remove trailing slash
     this.baseUrl = baseUrl.replace(/\/$/, "");
   }
 
   /**
-   * Health check - verify the daemon is running
+   * Health check - verify the server is running
    * @returns Ping response with status
    */
   async ping(): Promise<PingResponse> {
-    const response = await fetch(`${this.baseUrl}/ping`);
+    const response = await fetch(`${this.baseUrl}/api/ping`);
 
     if (!response.ok) {
       const error: ApiError = await response.json();
@@ -94,8 +149,8 @@ export class UpscaleClient {
   }
 
   /**
-   * Get available upscale capabilities
-   * @returns Available upscale methods (2 and/or 4)
+   * Get available capabilities based on GPU memory
+   * @returns Available features and device info
    */
   async capabilities(): Promise<CapabilitiesResponse> {
     const response = await fetch(`${this.baseUrl}/api/capabilities`);
@@ -149,7 +204,7 @@ export class UpscaleClient {
 
     console.log("[UpscaleClient] Upscaling with scale:", options.scale);
 
-    const response = await fetch(`${this.baseUrl}/upscale`, {
+    const response = await fetch(`${this.baseUrl}/api/upscale`, {
       method: "POST",
       body: formData,
     });
@@ -160,6 +215,50 @@ export class UpscaleClient {
     }
 
     return response.blob();
+  }
+
+  /**
+   * Generate an image from a text prompt
+   * @param options - Generation options including prompt
+   * @returns Generated image as Blob
+   */
+  async generate(options: GenerateOptions): Promise<Blob> {
+    const response = await fetch(`${this.baseUrl}/api/image`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: options.prompt,
+        negative_prompt: options.negativePrompt,
+        width: options.width,
+        height: options.height,
+        seed: options.seed,
+        steps: options.steps,
+        guidance: options.guidance,
+        model: options.model,
+      }),
+    });
+
+    if (!response.ok) {
+      const error: ApiError = await response.json();
+      throw new UpscaleApiError(response.status, error.detail);
+    }
+
+    return response.blob();
+  }
+
+  /**
+   * Generate an image and return as data URL
+   * @param options - Generation options including prompt
+   * @returns Generated image as data URL string
+   */
+  async generateToDataUrl(options: GenerateOptions): Promise<string> {
+    const blob = await this.generate(options);
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   }
 
   /**
@@ -198,6 +297,77 @@ export class UpscaleClient {
       reader.readAsDataURL(blob);
     });
   }
+}
+
+/** @deprecated Use UpscaleClient instead */
+export const AIClient = UpscaleClient;
+
+// Helper functions for working with capabilities
+
+/**
+ * Check if a specific capability is available
+ */
+export function hasCapability(
+  caps: CapabilitiesResponse,
+  kind: "upscale",
+  options: { scale: 2 | 4 },
+): boolean;
+export function hasCapability(
+  caps: CapabilitiesResponse,
+  kind: "image",
+  options: { model: string },
+): boolean;
+export function hasCapability(
+  caps: CapabilitiesResponse,
+  kind: string,
+  options: Record<string, unknown>,
+): boolean {
+  return caps.capabilities.some(
+    (cap) =>
+      cap.kind === kind &&
+      Object.entries(options).every(
+        ([k, v]) => (cap as unknown as Record<string, unknown>)[k] === v,
+      ),
+  );
+}
+
+/**
+ * Get all upscale capabilities
+ */
+export function getUpscaleCapabilities(
+  caps: CapabilitiesResponse,
+): UpscaleCapability[] {
+  return caps.capabilities.filter(
+    (c): c is UpscaleCapability => c.kind === "upscale",
+  );
+}
+
+/**
+ * Get all image generation capabilities
+ */
+export function getImageCapabilities(
+  caps: CapabilitiesResponse,
+): ImageCapability[] {
+  return caps.capabilities.filter(
+    (c): c is ImageCapability => c.kind === "image",
+  );
+}
+
+/**
+ * Check if upscaling at a specific scale is available
+ */
+export function canUpscale(caps: CapabilitiesResponse, scale: 2 | 4): boolean {
+  return hasCapability(caps, "upscale", { scale });
+}
+
+/**
+ * Check if image generation with a specific model is available
+ */
+export function canGenerate(
+  caps: CapabilitiesResponse,
+  model: string,
+): boolean {
+  return hasCapability(caps, "image", { model });
 }
 
 export default UpscaleClient;
