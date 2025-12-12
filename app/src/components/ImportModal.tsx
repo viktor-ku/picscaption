@@ -229,7 +229,7 @@ function ImportingView({
       </div>
 
       {/* Stats */}
-      <div className="flex items-center justify-center gap-8 py-4">
+      <div className="flex items-center justify-center gap-6 py-4">
         <div className="text-center">
           <div className="text-3xl font-bold text-green-600 tabular-nums">
             {stats?.created ?? 0}
@@ -242,6 +242,13 @@ function ImportingView({
             {stats?.updated ?? 0}
           </div>
           <div className="text-sm text-gray-500 mt-1">Existing rows</div>
+        </div>
+        <div className="w-px h-12 bg-gray-200" />
+        <div className="text-center">
+          <div className="text-3xl font-bold text-gray-400 tabular-nums">
+            {stats?.errors?.length ?? 0}
+          </div>
+          <div className="text-sm text-gray-400 mt-1">Failed</div>
         </div>
       </div>
     </div>
@@ -276,7 +283,7 @@ function DoneView({
       </div>
 
       {/* Stats */}
-      <div className="flex items-center justify-center gap-8 py-4">
+      <div className="flex items-center justify-center gap-6 py-4">
         <div className="text-center">
           <div className="text-3xl font-bold text-green-600 tabular-nums">
             {stats?.created ?? 0}
@@ -290,13 +297,21 @@ function DoneView({
           </div>
           <div className="text-sm text-gray-500 mt-1">Existing rows</div>
         </div>
+        <div className="w-px h-12 bg-gray-200" />
+        <div className="text-center">
+          <div className="text-3xl font-bold text-gray-400 tabular-nums">
+            {stats?.errors?.length ?? 0}
+          </div>
+          <div className="text-sm text-gray-400 mt-1">Failed</div>
+        </div>
       </div>
 
       {/* Errors if any */}
       {stats?.errors && stats.errors.length > 0 && (
         <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
           <p className="text-sm font-medium text-amber-800">
-            {stats.errors.length} warning{stats.errors.length !== 1 ? "s" : ""}
+            {stats.errors.length} row{stats.errors.length !== 1 ? "s" : ""}{" "}
+            failed
           </p>
           <p className="text-xs text-amber-700 mt-1">
             Check console for details
