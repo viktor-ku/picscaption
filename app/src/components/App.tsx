@@ -42,6 +42,8 @@ import {
   importProgressAtom,
   importStatsAtom,
   importModalOpenAtom,
+  importCancelledAtom,
+  store,
 } from "../lib/store";
 import {
   useImagePreloading,
@@ -76,6 +78,7 @@ export function App() {
   const [importStats, setImportStats] = useAtom(importStatsAtom);
   const [isImportModalOpen, setIsImportModalOpen] =
     useAtom(importModalOpenAtom);
+  const setImportCancelled = useSetAtom(importCancelledAtom);
 
   // Local UI state (not shared)
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -295,6 +298,7 @@ export function App() {
 
       setImportState("importing");
       setImportProgress({ current: 0, total: 0 });
+      setImportCancelled(false);
 
       // Initialize stats
       const startTime = Date.now();
@@ -366,6 +370,22 @@ export function App() {
           let totalUpdated = 0;
 
           for (let i = 0; i < values.length; i += BATCH_SIZE) {
+            // Check for cancellation before each batch
+            if (store.get(importCancelledAtom)) {
+              // Finalize stats with end time for cancelled state
+              const endTime = Date.now();
+              setImportStats((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      endTime,
+                    }
+                  : null,
+              );
+              setImportState("cancelled");
+              return;
+            }
+
             const batch = values.slice(i, i + BATCH_SIZE);
 
             // Count unique filenames in this batch (each filename = 1 row)
@@ -559,6 +579,12 @@ export function App() {
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
         onImportCsv={handleImportCsv}
+        onCancelImport={() => setImportCancelled(true)}
+        onResetImport={() => {
+          setImportState("idle");
+          setImportProgress(null);
+          setImportStats(null);
+        }}
         onOpenMetaSettings={() => {
           setIsImportModalOpen(false);
           setSettingsSection("meta");

@@ -15,6 +15,7 @@ import {
   FileSpreadsheet,
   ArrowRight,
   Coffee,
+  Ban,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -31,6 +32,8 @@ interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImportCsv: (file: File) => void;
+  onCancelImport: () => void;
+  onResetImport: () => void;
   onOpenMetaSettings: () => void;
   activeMetaObjects: MetaObject[];
 }
@@ -178,9 +181,11 @@ function IdleView({
 function ImportingView({
   progress,
   stats,
+  onCancel,
 }: {
   progress: ImportProgress | null;
   stats: ImportStats | null;
+  onCancel: () => void;
 }) {
   const [elapsedTime, setElapsedTime] = useState(0);
 
@@ -229,27 +234,94 @@ function ImportingView({
       </div>
 
       {/* Stats */}
-      <div className="flex items-center justify-center gap-6 py-4">
-        <div className="text-center">
+      <div className="flex items-center justify-center py-4">
+        <div className="text-center w-24">
           <div className="text-3xl font-bold text-green-600 tabular-nums">
             {stats?.created ?? 0}
           </div>
           <div className="text-sm text-gray-500 mt-1">New rows</div>
         </div>
         <div className="w-px h-12 bg-gray-200" />
-        <div className="text-center">
+        <div className="text-center w-24">
           <div className="text-3xl font-bold text-blue-600 tabular-nums">
             {stats?.updated ?? 0}
           </div>
-          <div className="text-sm text-gray-500 mt-1">Existing rows</div>
+          <div className="text-sm text-gray-500 mt-1">Updated</div>
         </div>
         <div className="w-px h-12 bg-gray-200" />
-        <div className="text-center">
+        <div className="text-center w-24">
           <div className="text-3xl font-bold text-gray-400 tabular-nums">
             {stats?.errors?.length ?? 0}
           </div>
           <div className="text-sm text-gray-400 mt-1">Failed</div>
         </div>
+      </div>
+
+      {/* Cancel button */}
+      <div className="flex justify-center pt-2">
+        <button
+          type="button"
+          onMouseDownCapture={onCancel}
+          className="px-6 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CancelledView({
+  progress,
+  stats,
+  onClose,
+}: {
+  progress: ImportProgress | null;
+  stats: ImportStats | null;
+  onClose: () => void;
+}) {
+  const duration =
+    stats?.endTime && stats?.startTime ? stats.endTime - stats.startTime : 0;
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Cancelled icon */}
+      <div className="flex justify-center py-4">
+        <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center">
+          <Ban className="w-10 h-10 text-gray-500" />
+        </div>
+      </div>
+
+      {/* Heading */}
+      <div className="text-center">
+        <h3 className="text-xl font-semibold text-gray-900">
+          Import Cancelled
+        </h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Stopped after {formatDuration(duration)}
+        </p>
+      </div>
+
+      {/* Progress info */}
+      <div className="py-6 text-center">
+        <div className="text-4xl font-bold text-gray-900 tabular-nums">
+          {progress?.current ?? 0}{" "}
+          <span className="text-2xl font-normal text-gray-400">
+            / {progress?.total ?? 0}
+          </span>
+        </div>
+        <div className="text-sm text-gray-500 mt-2">rows processed</div>
+      </div>
+
+      {/* Close button */}
+      <div className="flex justify-center pt-2">
+        <button
+          type="button"
+          onMouseDownCapture={onClose}
+          className="px-6 py-2.5 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-hover transition-colors cursor-pointer"
+        >
+          Close
+        </button>
       </div>
     </div>
   );
@@ -283,22 +355,22 @@ function DoneView({
       </div>
 
       {/* Stats */}
-      <div className="flex items-center justify-center gap-6 py-4">
-        <div className="text-center">
+      <div className="flex items-center justify-center py-4">
+        <div className="text-center w-24">
           <div className="text-3xl font-bold text-green-600 tabular-nums">
             {stats?.created ?? 0}
           </div>
           <div className="text-sm text-gray-500 mt-1">New rows</div>
         </div>
         <div className="w-px h-12 bg-gray-200" />
-        <div className="text-center">
+        <div className="text-center w-24">
           <div className="text-3xl font-bold text-blue-600 tabular-nums">
             {stats?.updated ?? 0}
           </div>
-          <div className="text-sm text-gray-500 mt-1">Existing rows</div>
+          <div className="text-sm text-gray-500 mt-1">Updated</div>
         </div>
         <div className="w-px h-12 bg-gray-200" />
-        <div className="text-center">
+        <div className="text-center w-24">
           <div className="text-3xl font-bold text-gray-400 tabular-nums">
             {stats?.errors?.length ?? 0}
           </div>
@@ -337,6 +409,8 @@ export function ImportModal({
   isOpen,
   onClose,
   onImportCsv,
+  onCancelImport,
+  onResetImport,
   onOpenMetaSettings,
   activeMetaObjects,
 }: ImportModalProps) {
@@ -352,6 +426,8 @@ export function ImportModal({
         return "Importing...";
       case "done":
         return "Import Complete";
+      case "cancelled":
+        return "Import Cancelled";
       default:
         return "Import CSV";
     }
@@ -359,6 +435,12 @@ export function ImportModal({
 
   // Allow closing modal anytime - import continues in background
   const handleClose = () => {
+    onClose();
+  };
+
+  // Close and reset state when dismissing from cancelled state
+  const handleDismissCancelled = () => {
+    onResetImport();
     onClose();
   };
 
@@ -399,11 +481,23 @@ export function ImportModal({
           )}
 
           {importState === "importing" && (
-            <ImportingView progress={importProgress} stats={importStats} />
+            <ImportingView
+              progress={importProgress}
+              stats={importStats}
+              onCancel={onCancelImport}
+            />
           )}
 
           {importState === "done" && (
             <DoneView stats={importStats} onClose={handleClose} />
+          )}
+
+          {importState === "cancelled" && (
+            <CancelledView
+              progress={importProgress}
+              stats={importStats}
+              onClose={handleDismissCancelled}
+            />
           )}
         </DialogPanel>
       </div>
