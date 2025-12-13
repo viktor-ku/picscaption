@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { useMutation } from "convex/react";
 import type { ImageData } from "../types";
 import { generateThumbnailsBatch } from "../lib/thumbnail";
@@ -14,6 +14,11 @@ import {
 import { computeDHash } from "../lib/perceptual-hash";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import {
+  saveDirectoryHandle,
+  loadDirectoryHandle,
+  requestStoredHandlePermission,
+} from "../lib/directory-storage";
 
 interface UseFileHandlingOptions {
   images: ImageData[];
@@ -101,10 +106,12 @@ export function useFileHandling({
       const imageFiles = files.filter(isImageFile);
 
       if (imageFiles.length === 0) {
+        // Still set the directory even with no images (for generation use case)
         setImages([]);
         setSelectedImageId(null);
-        setCurrentDirectory(null);
-        setErrorMessage("No images found in this folder");
+        setCurrentDirectory(directoryName);
+        // Don't show error - empty folder is valid for generating images into
+        setErrorMessage(null);
         return;
       }
 
@@ -167,6 +174,11 @@ export function useFileHandling({
         }
       }
       directoryHandleRef.current = dirHandle;
+
+      // Persist the directory handle for next session
+      saveDirectoryHandle(dirHandle).catch((err) =>
+        console.warn("Failed to save directory handle:", err),
+      );
 
       type FileWithPath = File & { path?: string };
       const firstFileWithPathIdx = files.findIndex(
@@ -234,13 +246,70 @@ export function useFileHandling({
     [processFiles],
   );
 
+  // Restore directory from previous session (requires user gesture to request permission)
+  const restoreDirectory = useCallback(async (): Promise<boolean> => {
+    const handle = await requestStoredHandlePermission();
+    if (!handle) return false;
+
+    try {
+      const files: File[] = [];
+      for await (const entry of handle.values()) {
+        if (entry.kind === "file") {
+          const file = await (entry as FileSystemFileHandle).getFile();
+          files.push(file);
+        }
+      }
+      directoryHandleRef.current = handle;
+      await processFiles(files, handle.name);
+      return true;
+    } catch (err) {
+      console.error("Failed to restore directory:", err);
+      return false;
+    }
+  }, [processFiles]);
+
+  // Check if there's a stored directory handle (for UI to show restore option)
+  const checkStoredDirectory = useCallback(async (): Promise<string | null> => {
+    const handle = await loadDirectoryHandle();
+    return handle?.name ?? null;
+  }, []);
+
+  // Select a folder for saving only (don't load images from it, don't persist for "Continue with")
+  const handleSelectSaveFolder = useCallback(async (): Promise<boolean> => {
+    if (!supportsDirectoryPicker()) {
+      setErrorMessage("Directory picker not supported in this browser");
+      return false;
+    }
+
+    try {
+      const dirHandle = await window.showDirectoryPicker();
+      directoryHandleRef.current = dirHandle;
+      setCurrentDirectory(dirHandle.name);
+
+      // Note: We intentionally do NOT save to IndexedDB here.
+      // This folder is only for saving generated images, not for "Continue with" restore.
+      // Only folders opened via handleSelectFolder should be persisted.
+
+      return true;
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") {
+        console.error("Failed to select save directory:", err);
+        setErrorMessage("Failed to select directory");
+      }
+      return false;
+    }
+  }, [setCurrentDirectory, setErrorMessage]);
+
   return {
     fileInputRef,
     directoryHandleRef,
     finalizeImages,
     processFiles,
     handleSelectFolder,
+    handleSelectSaveFolder,
     handleFolderChange,
+    restoreDirectory,
+    checkStoredDirectory,
   };
 }
 

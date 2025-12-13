@@ -11,6 +11,7 @@ export { Toggle } from "./Toggle";
 export { DeleteAllDataModal } from "./DeleteAllDataModal";
 export { DeleteMetaObjectModal } from "./DeleteMetaObjectModal";
 export { BulkUpscaleModal } from "./BulkUpscaleModal";
+export { GenerateModal, type GenerateOptions } from "./GenerateModal";
 export { ImportModal } from "./ImportModal";
 export {
   ConvexClientProvider,

@@ -1,10 +1,18 @@
-import { FolderUp } from "lucide-react";
+import { FolderUp, RotateCcw, Loader2 } from "lucide-react";
 
 interface EmptyStateProps {
   onSelectFolder: () => void;
+  storedDirName?: string | null;
+  onRestoreDirectory?: () => void;
+  isRestoring?: boolean;
 }
 
-export function EmptyState({ onSelectFolder }: EmptyStateProps) {
+export function EmptyState({
+  onSelectFolder,
+  storedDirName,
+  onRestoreDirectory,
+  isRestoring,
+}: EmptyStateProps) {
   return (
     <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 via-white to-rose-50/30">
       <div className="flex flex-col items-center text-center max-w-md px-6">
@@ -31,15 +39,44 @@ export function EmptyState({ onSelectFolder }: EmptyStateProps) {
           automatically saved and restored when you reopen the same images.
         </p>
 
-        {/* Action button */}
-        <button
-          type="button"
-          onMouseDownCapture={onSelectFolder}
-          className="flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium text-white bg-primary rounded-xl hover:bg-primary-hover transition-colors cursor-pointer shadow-md hover:shadow-lg"
-        >
-          <FolderUp className="w-5 h-5" />
-          Select Folder
-        </button>
+        {/* Action buttons */}
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          {/* Restore previous folder button - shown if we have a stored directory */}
+          {storedDirName && onRestoreDirectory && (
+            <button
+              type="button"
+              onMouseDownCapture={onRestoreDirectory}
+              disabled={isRestoring}
+              className="flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium text-white bg-primary rounded-xl hover:bg-primary-hover transition-colors cursor-pointer shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isRestoring ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Opening...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="w-5 h-5" />
+                  Continue with "{storedDirName}"
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Select folder button */}
+          <button
+            type="button"
+            onMouseDownCapture={onSelectFolder}
+            className={`flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium rounded-xl transition-colors cursor-pointer ${
+              storedDirName
+                ? "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+                : "text-white bg-primary hover:bg-primary-hover shadow-md hover:shadow-lg"
+            }`}
+          >
+            <FolderUp className="w-5 h-5" />
+            {storedDirName ? "Select Different Folder" : "Select Folder"}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -12,6 +12,9 @@ from services.queue import gpu_queue
 
 router = APIRouter(prefix="/api")
 
+# Supported local generation models
+LocalModel = Literal["sdxl", "flux", "flux2", "zimage-turbo"]
+
 
 class GenerateRequest(BaseModel):
     """Request body for image generation."""
@@ -23,7 +26,7 @@ class GenerateRequest(BaseModel):
     seed: int = Field(0, ge=0, description="Random seed (0 = random)")
     steps: int = Field(30, ge=1, le=100, description="Number of inference steps")
     guidance: float = Field(7.5, ge=0, le=20, description="Guidance scale")
-    model: Literal["sdxl", "flux"] = Field("sdxl", description="Model to use")
+    model: LocalModel = Field("sdxl", description="Model to use")
 
 
 @router.post("/image")

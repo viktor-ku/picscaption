@@ -109,6 +109,12 @@ def get_capabilities() -> CapabilitiesResponse:
         capabilities.append({"kind": "image", "model": "sdxl"})
     if mem >= 12:
         capabilities.append({"kind": "image", "model": "flux"})
+    if mem >= 16:
+        # Z-Image-Turbo fits in 16GB VRAM
+        capabilities.append({"kind": "image", "model": "zimage-turbo"})
+    if mem >= 24:
+        # FLUX.2-dev is a 32B model, needs more VRAM
+        capabilities.append({"kind": "image", "model": "flux2"})
 
     return {
         "capabilities": capabilities,

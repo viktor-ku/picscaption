@@ -190,4 +190,3 @@ class Captioner:
 
 
 captioner = Captioner()
-

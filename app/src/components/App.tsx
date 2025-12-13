@@ -14,11 +14,21 @@ import {
   KeybindingsModal,
   BulkEditModal,
   BulkUpscaleModal,
+  GenerateModal,
+  type GenerateOptions,
   SettingsModal,
   DeleteAllDataModal,
   ImportModal,
   type SettingsSection,
 } from "./index";
+import { StabilityGenerateClient } from "../lib/stability-generate-client";
+import {
+  UpscaleClient,
+  type LocalGenerateModel,
+} from "../lib/ai3-upscale-client";
+import type { ImageData } from "../types";
+import { generateThumbnail } from "../lib/thumbnail";
+import { generateUUID } from "../lib/image-identity";
 import { ResizeHandle } from "./ResizeHandle";
 import type { Settings, MetaObject } from "../lib/settings";
 import { exportCaptions } from "../lib/export";
@@ -85,6 +95,8 @@ export function App() {
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isBulkUpscaleOpen, setIsBulkUpscaleOpen] = useState(false);
   const [isDeleteAllDataOpen, setIsDeleteAllDataOpen] = useState(false);
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [settingsSection, setSettingsSection] =
     useState<SettingsSection | null>(() => {
       if (typeof window === "undefined") return null;
@@ -97,6 +109,9 @@ export function App() {
         : null;
     });
   const isSettingsOpen = settingsSection !== null;
+
+  // Generation clients
+  const stabilityGenerateClient = useRef(new StabilityGenerateClient()).current;
 
   // User hook for Convex user ID
   const { userId, ensureUser } = useUser();
@@ -115,7 +130,10 @@ export function App() {
     fileInputRef,
     directoryHandleRef,
     handleSelectFolder,
+    handleSelectSaveFolder,
     handleFolderChange,
+    restoreDirectory,
+    checkStoredDirectory,
   } = useFileHandling({
     images,
     setImages,
@@ -123,6 +141,24 @@ export function App() {
     setCurrentDirectory,
     setErrorMessage,
   });
+
+  // Check for stored directory on mount
+  const [storedDirName, setStoredDirName] = useState<string | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  useEffect(() => {
+    checkStoredDirectory().then(setStoredDirName);
+  }, [checkStoredDirectory]);
+
+  const handleRestoreDirectory = useCallback(async () => {
+    setIsRestoring(true);
+    const success = await restoreDirectory();
+    setIsRestoring(false);
+    if (!success) {
+      toast.error("Could not restore previous folder. Please select again.");
+      setStoredDirName(null);
+    }
+  }, [restoreDirectory]);
 
   // Bulk upscale hook
   const {
@@ -620,6 +656,188 @@ export function App() {
     [images, directoryHandleRef, setImages],
   );
 
+  // Get available local models from ai3 server
+  const { data: ai3Capabilities } = useQuery({
+    queryKey: ["ai3-capabilities", settings.upscaleServerUrl],
+    queryFn: async () => {
+      if (!ai3UpscaleClient) return null;
+      return ai3UpscaleClient.capabilities();
+    },
+    enabled: ai3UpscaleClient !== null,
+    retry: false,
+    staleTime: 60000, // Cache for 1 minute
+  });
+
+  const availableLocalModels: LocalGenerateModel[] =
+    ai3Capabilities?.capabilities
+      ?.filter((c) => c.kind === "image")
+      .map((c) => c.model as LocalGenerateModel) ?? [];
+
+  // Helper to save generated file to the current directory
+  // Note: Permission should already be granted before calling this
+  const saveGeneratedFile = useCallback(
+    async (blob: Blob, fileName: string): Promise<void> => {
+      const dirHandle = directoryHandleRef.current;
+
+      if (!dirHandle) {
+        throw new Error("No folder selected");
+      }
+
+      const fileHandle = await dirHandle.getFileHandle(fileName, {
+        create: true,
+      });
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+    },
+    [directoryHandleRef],
+  );
+
+  const handleGenerate = useCallback(
+    async (options: GenerateOptions) => {
+      // Require a folder to be selected first
+      if (!directoryHandleRef.current) {
+        toast.error("Please select a folder first to save generated images.");
+        return;
+      }
+
+      // Request write permission NOW while we have user activation
+      // (before the async generation call which takes time)
+      try {
+        const permission = await directoryHandleRef.current.requestPermission({
+          mode: "readwrite",
+        });
+        if (permission !== "granted") {
+          toast.error(
+            "Write permission denied. Please allow access to save generated images.",
+          );
+          return;
+        }
+      } catch (err) {
+        console.error("Permission request failed:", err);
+        toast.error(
+          "Could not get folder permission. Please try selecting the folder again.",
+        );
+        return;
+      }
+
+      setIsGenerating(true);
+      const repeatCount = options.repeat ?? 1;
+      let lastImageId: string | null = null;
+      let successCount = 0;
+
+      try {
+        for (let i = 0; i < repeatCount; i++) {
+          let blob: Blob;
+
+          if (options.provider === "local") {
+            if (!ai3UpscaleClient) {
+              throw new Error("Local ai3 server not configured");
+            }
+            blob = await ai3UpscaleClient.generate({
+              prompt: options.prompt,
+              negativePrompt: options.negativePrompt,
+              width: options.width,
+              height: options.height,
+              seed: options.seed ? options.seed + i : undefined, // Increment seed for each iteration
+              steps: options.steps,
+              guidance: options.cfgScale,
+              model: options.model as LocalGenerateModel,
+            });
+          } else {
+            blob = await stabilityGenerateClient.generate({
+              model: options.model as Parameters<
+                typeof stabilityGenerateClient.generate
+              >[0]["model"],
+              prompt: options.prompt,
+              negativePrompt: options.negativePrompt,
+              width: options.width,
+              height: options.height,
+              aspectRatio: options.aspectRatio,
+              seed: options.seed ? options.seed + i : undefined, // Increment seed for each iteration
+              steps: options.steps,
+              cfgScale: options.cfgScale,
+            });
+          }
+
+          // Create a unique filename for the generated image
+          const timestamp = Date.now();
+          const fileName = `generated_${timestamp}.png`;
+
+          // Save to the current working directory (same as imported images)
+          await saveGeneratedFile(blob, fileName);
+
+          // Create File object from blob
+          const file = new File([blob], fileName, { type: "image/png" });
+          const fullImageUrl = URL.createObjectURL(file);
+
+          // Generate thumbnail
+          const thumbnailUrl = await generateThumbnail(file);
+
+          // Get image dimensions
+          const img = new Image();
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = reject;
+            img.src = fullImageUrl;
+          });
+
+          // Create new ImageData
+          const newImage: ImageData = {
+            id: `generated-${timestamp}`,
+            uuid: generateUUID(),
+            fileName,
+            namespace: currentDirectory ?? undefined,
+            caption: options.prompt, // Use prompt as initial caption
+            file,
+            thumbnailUrl,
+            fullImageUrl,
+            width: img.width,
+            height: img.height,
+          };
+
+          // Add to images array
+          setImages((draft) => {
+            draft.push(newImage);
+          });
+          lastImageId = newImage.id;
+          successCount++;
+        }
+
+        // Select the last generated image
+        if (lastImageId) {
+          setSelectedImageId(lastImageId);
+        }
+
+        const message =
+          repeatCount > 1
+            ? `Generated ${successCount} images successfully!`
+            : "Image generated successfully!";
+        toast.success(message);
+        setIsGenerateModalOpen(false);
+      } catch (err) {
+        console.error("Generation failed:", err);
+        const errorMsg =
+          err instanceof Error ? err.message : "Failed to generate image";
+        if (successCount > 0) {
+          toast.error(`${errorMsg} (${successCount}/${repeatCount} completed)`);
+        } else {
+          toast.error(errorMsg);
+        }
+      } finally {
+        setIsGenerating(false);
+      }
+    },
+    [
+      ai3UpscaleClient,
+      stabilityGenerateClient,
+      setImages,
+      setSelectedImageId,
+      saveGeneratedFile,
+      currentDirectory,
+    ],
+  );
+
   return (
     <div className="h-screen flex flex-col bg-white">
       <Toaster position="bottom-center" />
@@ -711,6 +929,16 @@ export function App() {
         onConfirm={handleDeleteAllData}
       />
 
+      <GenerateModal
+        isOpen={isGenerateModalOpen}
+        onClose={() => setIsGenerateModalOpen(false)}
+        onGenerate={handleGenerate}
+        isGenerating={isGenerating}
+        availableLocalModels={availableLocalModels}
+        saveDirName={currentDirectory}
+        onSelectFolder={handleSelectSaveFolder}
+      />
+
       {errorMessage && (
         <div className="bg-red-50 border-b border-red-200 px-6 py-3 text-sm text-red-700">
           {errorMessage}
@@ -718,67 +946,71 @@ export function App() {
       )}
 
       {images.length === 0 ? (
-        <EmptyState onSelectFolder={handleSelectFolder} />
+        <EmptyState
+          onSelectFolder={handleSelectFolder}
+          storedDirName={storedDirName}
+          onRestoreDirectory={handleRestoreDirectory}
+          isRestoring={isRestoring}
+        />
       ) : (
-        <>
+        <div
+          ref={containerRef}
+          className={`flex-1 flex overflow-hidden ${isDragging ? "select-none" : ""}`}
+        >
           <div
-            ref={containerRef}
-            className={`flex-1 flex overflow-hidden ${isDragging ? "select-none" : ""}`}
+            className="overflow-y-auto shrink-0"
+            style={{ width: `${leftPaneWidth}%`, minWidth: MIN_PANE_WIDTH }}
           >
-            <div
-              className="overflow-y-auto shrink-0"
-              style={{ width: `${leftPaneWidth}%`, minWidth: MIN_PANE_WIDTH }}
-            >
-              <CaptionForm
-                selectedImage={selectedImage}
-                currentIndex={currentIndex}
-                totalImages={images.length}
-                onCaptionChange={handleCaptionChange}
-              />
-            </div>
-
-            <ResizeHandle
-              onMouseDown={handleResizeStart}
-              onKeyDown={(e) => {
-                const container = containerRef.current;
-                if (!container) return;
-                const step = e.shiftKey ? 5 : 1;
-                const minPct = (MIN_PANE_WIDTH / container.offsetWidth) * 100;
-                if (e.key === "ArrowLeft") {
-                  e.preventDefault();
-                  setLeftPaneWidth((p) => Math.max(minPct, p - step));
-                } else if (e.key === "ArrowRight") {
-                  e.preventDefault();
-                  setLeftPaneWidth((p) => Math.min(MAX_PANE_PERCENT, p + step));
-                }
-              }}
+            <CaptionForm
+              selectedImage={selectedImage}
+              currentIndex={currentIndex}
+              totalImages={images.length}
+              onCaptionChange={handleCaptionChange}
             />
-
-            <div className="flex-1 overflow-hidden min-w-0">
-              <ImagePreview
-                selectedImage={selectedImage}
-                onUpscaleConfirm={handleUpscaleConfirm}
-                onCropConfirm={handleCropConfirm}
-                upscaleProviders={settings.upscaleProviders}
-                upscaleServerUrl={settings.upscaleServerUrl}
-                hasPendingCrop={
-                  pendingCrop !== null &&
-                  pendingCrop.imageId === selectedImage?.id
-                }
-                onCancelCrop={handleCancelCrop}
-                onCropModeChange={setIsCropping}
-              />
-            </div>
           </div>
 
-          <Filmstrip
-            images={images}
-            selectedImageId={selectedImageId}
-            onSelectImage={handleSelectImage}
-            onRemoveBrokenImage={handleRemoveBrokenImage}
+          <ResizeHandle
+            onMouseDown={handleResizeStart}
+            onKeyDown={(e) => {
+              const container = containerRef.current;
+              if (!container) return;
+              const step = e.shiftKey ? 5 : 1;
+              const minPct = (MIN_PANE_WIDTH / container.offsetWidth) * 100;
+              if (e.key === "ArrowLeft") {
+                e.preventDefault();
+                setLeftPaneWidth((p) => Math.max(minPct, p - step));
+              } else if (e.key === "ArrowRight") {
+                e.preventDefault();
+                setLeftPaneWidth((p) => Math.min(MAX_PANE_PERCENT, p + step));
+              }
+            }}
           />
-        </>
+
+          <div className="flex-1 overflow-hidden min-w-0">
+            <ImagePreview
+              selectedImage={selectedImage}
+              onUpscaleConfirm={handleUpscaleConfirm}
+              onCropConfirm={handleCropConfirm}
+              upscaleProviders={settings.upscaleProviders}
+              upscaleServerUrl={settings.upscaleServerUrl}
+              hasPendingCrop={
+                pendingCrop !== null &&
+                pendingCrop.imageId === selectedImage?.id
+              }
+              onCancelCrop={handleCancelCrop}
+              onCropModeChange={setIsCropping}
+            />
+          </div>
+        </div>
       )}
+
+      <Filmstrip
+        images={images}
+        selectedImageId={selectedImageId}
+        onSelectImage={handleSelectImage}
+        onRemoveBrokenImage={handleRemoveBrokenImage}
+        onAddClick={() => setIsGenerateModalOpen(true)}
+      />
     </div>
   );
 }

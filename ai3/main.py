@@ -9,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes import caption_router, generate_router, health_router, upscale_router
 from services.capabilities import get_capabilities
 from services.captioner import captioner
-from services.generator import generator
 from services.queue import gpu_queue
 from services.upscaler import upscaler
 
@@ -34,14 +33,15 @@ async def lifespan(app: FastAPI):
     caption_caps = [c for c in caps["capabilities"] if c["kind"] == "caption"]
 
     # Preload models based on capabilities
+    # Note: Generator uses lazy loading, so we don't preload image models
     if upscale_caps:
         logger.info("Preloading upscaler models...")
         await upscaler.load()
 
     if image_caps:
-        logger.info("Preloading generation models...")
-        models = [c["model"] for c in image_caps]
-        await generator.load(models)
+        logger.info(
+            f"Image generation available (lazy loading): {[c['model'] for c in image_caps]}"
+        )
 
     if caption_caps:
         logger.info("Preloading caption models...")

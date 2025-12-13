@@ -51,11 +51,14 @@ export interface UpscaleOptions {
   guidance?: number;
 }
 
+/** Local generation model types */
+export type LocalGenerateModel = "sdxl" | "flux" | "flux2" | "zimage-turbo";
+
 /** Image generation options */
 export interface GenerateOptions {
   /** Text prompt for generation */
   prompt: string;
-  /** Things to avoid in output */
+  /** Things to avoid in output (not used by flux/zimage-turbo) */
   negativePrompt?: string;
   /** Image width (default: 1024) */
   width?: number;
@@ -65,11 +68,62 @@ export interface GenerateOptions {
   seed?: number;
   /** Number of inference steps, 1-100 (default: 30) */
   steps?: number;
-  /** Guidance scale, 0-20 (default: 7.5) */
+  /** Guidance scale, 0-20 (default: 7.5, not used by flux/zimage-turbo) */
   guidance?: number;
   /** Model to use (default: "sdxl") */
-  model?: "sdxl" | "flux";
+  model?: LocalGenerateModel;
 }
+
+/** Local model display information */
+export interface LocalModelInfo {
+  id: LocalGenerateModel;
+  name: string;
+  description: string;
+  supportsNegativePrompt: boolean;
+  supportsGuidance: boolean;
+  defaultSteps: number;
+  minVram: number;
+}
+
+/** Available local models with their info */
+export const LOCAL_MODELS: LocalModelInfo[] = [
+  {
+    id: "sdxl",
+    name: "SDXL",
+    description: "Stable Diffusion XL - high quality, configurable",
+    supportsNegativePrompt: true,
+    supportsGuidance: true,
+    defaultSteps: 30,
+    minVram: 8,
+  },
+  {
+    id: "flux",
+    name: "Flux (FLUX.1-schnell)",
+    description: "Fast generation, 4 steps",
+    supportsNegativePrompt: false,
+    supportsGuidance: false,
+    defaultSteps: 4,
+    minVram: 12,
+  },
+  {
+    id: "flux2",
+    name: "FLUX.2-dev",
+    description: "32B parameter model, best quality",
+    supportsNegativePrompt: false,
+    supportsGuidance: true,
+    defaultSteps: 28,
+    minVram: 24,
+  },
+  {
+    id: "zimage-turbo",
+    name: "Z-Image-Turbo",
+    description: "6B params, 8 steps, sub-second inference",
+    supportsNegativePrompt: false,
+    supportsGuidance: false,
+    defaultSteps: 9,
+    minVram: 16,
+  },
+];
 
 /** Ping response */
 export interface PingResponse {

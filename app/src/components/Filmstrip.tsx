@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from "react";
 import clsx from "clsx";
+import { Plus } from "lucide-react";
 import type { ImageData } from "../types";
 
 interface FilmstripProps {
@@ -7,6 +8,7 @@ interface FilmstripProps {
   selectedImageId: string | null;
   onSelectImage: (id: string) => void;
   onRemoveBrokenImage?: (id: string) => void;
+  onAddClick?: () => void;
 }
 
 function EyeIcon() {
@@ -34,6 +36,7 @@ export function Filmstrip({
   selectedImageId,
   onSelectImage,
   onRemoveBrokenImage,
+  onAddClick,
 }: FilmstripProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const selectedThumbnailRef = useRef<HTMLButtonElement>(null);
@@ -74,10 +77,6 @@ export function Filmstrip({
   // Filter out broken images for display
   const visibleImages = images.filter((img) => !brokenImageIds.has(img.id));
 
-  if (visibleImages.length === 0) {
-    return null;
-  }
-
   const handleImageError = (imageId: string) => {
     // Immediately hide in local state
     setBrokenImageIds((prev) => new Set(prev).add(imageId));
@@ -87,7 +86,26 @@ export function Filmstrip({
 
   return (
     <div className="bg-gray-100 border-t border-gray-200 px-4 py-3">
-      <div ref={scrollContainerRef} className="flex gap-2 overflow-x-auto py-1">
+      <div
+        ref={scrollContainerRef}
+        className="flex gap-2 overflow-x-auto py-1 px-1"
+      >
+        {/* Add/Generate button */}
+        <button
+          type="button"
+          onClick={onAddClick}
+          className={clsx(
+            "relative flex-shrink-0 w-20 h-20 overflow-hidden cursor-pointer",
+            "border-2 border-dashed border-gray-300 rounded-lg",
+            "hover:border-primary hover:bg-primary/5",
+            "transition-colors flex items-center justify-center",
+            "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+          )}
+          title="Generate new image"
+        >
+          <Plus className="w-8 h-8 text-gray-400 group-hover:text-primary" />
+        </button>
+
         {visibleImages.map((image) => {
           const isSelected = image.id === selectedImageId;
           const hasCaption = image.caption.trim().length > 0;
