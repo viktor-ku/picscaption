@@ -99,7 +99,7 @@ export function App() {
   const isSettingsOpen = settingsSection !== null;
 
   // User hook for Convex user ID
-  const { userId } = useUser();
+  const { userId, ensureUser } = useUser();
 
   // Convex queries and mutations for CSV import
   const metaObjects = useConvexQuery(
@@ -271,9 +271,15 @@ export function App() {
   );
 
   const handleImportCsv = useCallback(
-    async (file: File) => {
-      if (!userId) {
-        toast.error("Please sign in to import metadata");
+    async (files: File[]) => {
+      if (files.length === 0) {
+        return;
+      }
+
+      // Ensure user exists before importing (creates anonymous user if needed)
+      const actualUserId = await ensureUser();
+      if (!actualUserId) {
+        toast.error("Failed to create user. Please try again.");
         return;
       }
 
@@ -297,7 +303,13 @@ export function App() {
       }
 
       setImportState("importing");
-      setImportProgress({ current: 0, total: 0 });
+      setImportProgress({
+        current: 0,
+        total: 0,
+        currentFile: 1,
+        totalFiles: files.length,
+        currentFileName: files[0].name,
+      });
       setImportCancelled(false);
 
       // Initialize stats
@@ -307,116 +319,175 @@ export function App() {
         updated: 0,
         startTime,
         totalRows: 0,
+        filesProcessed: 0,
+        totalFiles: files.length,
         errors: [],
       });
 
+      // Aggregate counters across all files
+      let grandTotalCreated = 0;
+      let grandTotalUpdated = 0;
+      let grandTotalRows = 0;
+      let grandTotalRowsProcessed = 0;
+      const allErrors: string[] = [];
+
       try {
-        // Read and parse CSV
-        const csvContent = await readCsvFile(file);
-        const { rows, errors: parseErrors } = parseAndValidateCsv(
-          csvContent,
-          activeMetaObjects,
-        );
+        // Process each file sequentially
+        for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+          const file = files[fileIndex];
 
-        if (rows.length === 0 && parseErrors.length > 0) {
-          // All rows failed validation
-          const errorMsg = formatImportErrors(parseErrors);
-          toast.error(errorMsg);
-          console.error("CSV parse errors:", parseErrors);
-          setImportState("idle");
-          setImportProgress(null);
-          setImportStats(null);
-          return;
-        }
-
-        // Update stats with total rows
-        setImportStats((prev) =>
-          prev
-            ? {
-                ...prev,
-                totalRows: rows.length,
-                errors: parseErrors.map((e) => `Row ${e.row}: ${e.message}`),
-              }
-            : null,
-        );
-
-        // Prepare values for bulk upsert
-        const values: Array<{
-          filename: string;
-          metaObjectId: Id<"metaObjects">;
-          value: string | number;
-        }> = [];
-
-        for (const row of rows) {
-          for (const val of row.values) {
-            values.push({
-              filename: row.filename,
-              metaObjectId: val.metaObjectId as Id<"metaObjects">,
-              value: val.value,
-            });
-          }
-        }
-
-        if (values.length > 0) {
-          // Batch upsert to Convex in chunks to avoid timeout
-          const BATCH_SIZE = 50;
-          const totalRows = rows.length;
-          setImportProgress({ current: 0, total: totalRows });
-
-          // Track unique filenames processed per batch for row count
-          let rowsProcessed = 0;
-          const processedFilenames = new Set<string>();
-          let totalCreated = 0;
-          let totalUpdated = 0;
-
-          for (let i = 0; i < values.length; i += BATCH_SIZE) {
-            // Check for cancellation before each batch
-            if (store.get(importCancelledAtom)) {
-              // Finalize stats with end time for cancelled state
-              const endTime = Date.now();
-              setImportStats((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      endTime,
-                    }
-                  : null,
-              );
-              setImportState("cancelled");
-              return;
-            }
-
-            const batch = values.slice(i, i + BATCH_SIZE);
-
-            // Count unique filenames in this batch (each filename = 1 row)
-            for (const val of batch) {
-              if (!processedFilenames.has(val.filename)) {
-                processedFilenames.add(val.filename);
-                rowsProcessed++;
-              }
-            }
-            setImportProgress({ current: rowsProcessed, total: totalRows });
-
-            const result = await bulkUpsertMetaValues({
-              values: batch,
-              userId,
-            });
-
-            // Accumulate created/updated counts
-            totalCreated += result.created;
-            totalUpdated += result.updated;
-
-            // Update stats with cumulative counts
+          // Check for cancellation before processing each file
+          if (store.get(importCancelledAtom)) {
+            const endTime = Date.now();
             setImportStats((prev) =>
               prev
                 ? {
                     ...prev,
-                    created: totalCreated,
-                    updated: totalUpdated,
+                    endTime,
+                    filesProcessed: fileIndex,
                   }
                 : null,
             );
+            setImportState("cancelled");
+            return;
           }
+
+          // Update progress to show current file
+          setImportProgress((prev) => ({
+            current: prev?.current ?? 0,
+            total: prev?.total ?? 0,
+            currentFile: fileIndex + 1,
+            totalFiles: files.length,
+            currentFileName: file.name,
+          }));
+
+          // Read and parse CSV
+          const csvContent = await readCsvFile(file);
+          const { rows, errors: parseErrors } = parseAndValidateCsv(
+            csvContent,
+            activeMetaObjects,
+          );
+
+          // Collect parse errors with file name prefix
+          for (const e of parseErrors) {
+            allErrors.push(`[${file.name}] Row ${e.row}: ${e.message}`);
+          }
+
+          if (rows.length === 0 && parseErrors.length > 0) {
+            // All rows in this file failed validation, log and continue to next file
+            console.error(`CSV parse errors in ${file.name}:`, parseErrors);
+            continue;
+          }
+
+          // Update total rows across all files
+          grandTotalRows += rows.length;
+          setImportStats((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  totalRows: grandTotalRows,
+                  errors: allErrors,
+                }
+              : null,
+          );
+
+          // Prepare values for bulk upsert
+          const values: Array<{
+            filename: string;
+            metaObjectId: Id<"metaObjects">;
+            value: string | number;
+          }> = [];
+
+          for (const row of rows) {
+            for (const val of row.values) {
+              values.push({
+                filename: row.filename,
+                metaObjectId: val.metaObjectId as Id<"metaObjects">,
+                value: val.value,
+              });
+            }
+          }
+
+          if (values.length > 0) {
+            // Batch upsert to Convex in chunks to avoid timeout
+            const BATCH_SIZE = 50;
+            const totalRowsInFile = rows.length;
+
+            // Track unique filenames processed per batch for row count
+            let rowsProcessedInFile = 0;
+            const processedFilenames = new Set<string>();
+            let fileCreated = 0;
+            let fileUpdated = 0;
+
+            for (let i = 0; i < values.length; i += BATCH_SIZE) {
+              // Check for cancellation before each batch
+              if (store.get(importCancelledAtom)) {
+                // Finalize stats with end time for cancelled state
+                const endTime = Date.now();
+                setImportStats((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        endTime,
+                        filesProcessed: fileIndex,
+                      }
+                    : null,
+                );
+                setImportState("cancelled");
+                return;
+              }
+
+              const batch = values.slice(i, i + BATCH_SIZE);
+
+              // Count unique filenames in this batch (each filename = 1 row)
+              for (const val of batch) {
+                if (!processedFilenames.has(val.filename)) {
+                  processedFilenames.add(val.filename);
+                  rowsProcessedInFile++;
+                  grandTotalRowsProcessed++;
+                }
+              }
+              setImportProgress({
+                current: grandTotalRowsProcessed,
+                total: grandTotalRows,
+                currentFile: fileIndex + 1,
+                totalFiles: files.length,
+                currentFileName: file.name,
+              });
+
+              const result = await bulkUpsertMetaValues({
+                values: batch,
+                userId: actualUserId,
+              });
+
+              // Accumulate created/updated counts
+              fileCreated += result.created;
+              fileUpdated += result.updated;
+              grandTotalCreated += result.created;
+              grandTotalUpdated += result.updated;
+
+              // Update stats with cumulative counts
+              setImportStats((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      created: grandTotalCreated,
+                      updated: grandTotalUpdated,
+                    }
+                  : null,
+              );
+            }
+          }
+
+          // Update files processed count
+          setImportStats((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  filesProcessed: fileIndex + 1,
+                }
+              : null,
+          );
         }
 
         // Finalize stats with end time
@@ -431,14 +502,17 @@ export function App() {
         );
 
         // Show success/partial success toast
-        if (parseErrors.length === 0) {
-          toast.success(`Imported metadata for ${rows.length} rows`);
+        const fileLabel = files.length === 1 ? "file" : "files";
+        if (allErrors.length === 0) {
+          toast.success(
+            `Imported metadata for ${grandTotalRows} rows from ${files.length} ${fileLabel}`,
+          );
         } else {
           toast.success(
-            `Imported ${rows.length} rows, ${parseErrors.length} skipped`,
+            `Imported ${grandTotalRows} rows from ${files.length} ${fileLabel}, ${allErrors.length} errors`,
           );
           // Show details of errors
-          console.warn("Import parse errors:", parseErrors);
+          console.warn("Import parse errors:", allErrors);
         }
 
         // Show done state
@@ -459,7 +533,7 @@ export function App() {
         setImportStats(null);
       }
     },
-    [userId, metaObjects, bulkUpsertMetaValues, setImportStats],
+    [ensureUser, metaObjects, bulkUpsertMetaValues, setImportStats],
   );
 
   const handleBulkOverwrite = useCallback(

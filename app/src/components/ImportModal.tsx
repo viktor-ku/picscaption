@@ -31,7 +31,7 @@ import type { MetaObject } from "../lib/settings";
 interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImportCsv: (file: File) => void;
+  onImportCsv: (files: File[]) => void;
   onCancelImport: () => void;
   onResetImport: () => void;
   onOpenMetaSettings: () => void;
@@ -55,15 +55,15 @@ function IdleView({
   activeMetaObjects,
   fileInputRef,
 }: {
-  onImportCsv: (file: File) => void;
+  onImportCsv: (files: File[]) => void;
   onOpenMetaSettings: () => void;
   activeMetaObjects: MetaObject[];
   fileInputRef: React.RefObject<HTMLInputElement | null>;
 }) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onImportCsv(file);
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      onImportCsv(Array.from(files));
       e.target.value = "";
     }
   };
@@ -74,11 +74,12 @@ function IdleView({
 
   return (
     <div className="p-6 space-y-6">
-      {/* Hidden file input */}
+      {/* Hidden file input - supports multiple files */}
       <input
         ref={fileInputRef}
         type="file"
         accept=".csv"
+        multiple
         onChange={handleFileChange}
         className="hidden"
       />
@@ -91,10 +92,10 @@ function IdleView({
           className="flex items-center gap-3 px-8 py-4 text-lg font-medium text-white bg-primary rounded-xl hover:bg-primary-hover transition-all duration-200 shadow-lg hover:shadow-xl cursor-pointer"
         >
           <Upload className="w-6 h-6" />
-          Select CSV File
+          Select CSV Files
         </button>
         <p className="mt-4 text-sm text-gray-500">
-          Import metadata from a CSV file
+          Import metadata from one or more CSV files
         </p>
       </div>
 
@@ -213,6 +214,20 @@ function ImportingView({
         </p>
       </div>
 
+      {/* File progress indicator for multi-file imports */}
+      {progress?.totalFiles && progress.totalFiles > 1 && (
+        <div className="text-center text-sm text-gray-600">
+          <span className="font-medium">
+            File {progress.currentFile} of {progress.totalFiles}
+          </span>
+          {progress.currentFileName && (
+            <span className="text-gray-400 ml-2 truncate max-w-[200px] inline-block align-bottom">
+              ({progress.currentFileName})
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Progress bar */}
       <div className="space-y-3">
         <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
@@ -311,6 +326,11 @@ function CancelledView({
           </span>
         </div>
         <div className="text-sm text-gray-500 mt-2">rows processed</div>
+        {stats?.totalFiles && stats.totalFiles > 1 && (
+          <div className="text-sm text-gray-400 mt-1">
+            ({stats.filesProcessed ?? 0} of {stats.totalFiles} files completed)
+          </div>
+        )}
       </div>
 
       {/* Close button */}
@@ -350,7 +370,12 @@ function DoneView({
       <div className="text-center">
         <h3 className="text-xl font-semibold text-gray-900">Import Complete</h3>
         <p className="mt-1 text-sm text-gray-500">
-          Completed in {formatDuration(duration)}
+          {stats?.totalFiles && stats.totalFiles > 1 && (
+            <span>{stats.totalFiles} files processed in </span>
+          )}
+          {stats?.totalFiles && stats.totalFiles > 1
+            ? formatDuration(duration)
+            : `Completed in ${formatDuration(duration)}`}
         </p>
       </div>
 

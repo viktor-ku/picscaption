@@ -94,10 +94,13 @@ export const bulkUpscaleProgressAtom = atom<BulkUpscaleProgress | null>(null);
 export type ImportState = "idle" | "importing" | "done" | "cancelled";
 export const importStateAtom = atom<ImportState>("idle");
 
-/** Import progress (current row / total rows) */
+/** Import progress (current row / total rows, with file tracking for multi-file imports) */
 export interface ImportProgress {
   current: number;
   total: number;
+  currentFile?: number; // 1-indexed current file being processed
+  totalFiles?: number; // Total number of files to process
+  currentFileName?: string; // Name of current file being processed
 }
 export const importProgressAtom = atom<ImportProgress | null>(null);
 
@@ -108,6 +111,8 @@ export interface ImportStats {
   startTime: number; // Date.now() when import started
   endTime?: number; // Date.now() when import finished
   totalRows: number;
+  filesProcessed?: number; // Number of files processed
+  totalFiles?: number; // Total number of files
   errors: string[];
 }
 export const importStatsAtom = atom<ImportStats | null>(null);
