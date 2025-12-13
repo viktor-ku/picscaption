@@ -10,7 +10,6 @@ import {
   X,
   Upload,
   Check,
-  Loader2,
   Settings,
   FileSpreadsheet,
   ArrowRight,
@@ -28,7 +27,7 @@ import {
 } from "../lib/store";
 import type { MetaObject } from "../lib/settings";
 
-interface ImportModalProps {
+interface ImportDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onImportCsv: (files: File[]) => void;
@@ -73,7 +72,7 @@ function IdleView({
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 overflow-y-auto flex-1">
       {/* Hidden file input - supports multiple files */}
       <input
         ref={fileInputRef}
@@ -205,7 +204,7 @@ function ImportingView({
     : 0;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 overflow-y-auto flex-1">
       {/* Coffee icon and message */}
       <div className="flex flex-col items-center py-4">
         <Coffee className="w-12 h-12 text-amber-500" />
@@ -299,7 +298,7 @@ function CancelledView({
     stats?.endTime && stats?.startTime ? stats.endTime - stats.startTime : 0;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 overflow-y-auto flex-1">
       {/* Cancelled icon */}
       <div className="flex justify-center py-4">
         <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center">
@@ -358,7 +357,7 @@ function DoneView({
     stats?.endTime && stats?.startTime ? stats.endTime - stats.startTime : 0;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 overflow-y-auto flex-1">
       {/* Success icon */}
       <div className="flex justify-center py-4">
         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center animate-[scaleIn_0.3s_ease-out]">
@@ -430,7 +429,7 @@ function DoneView({
   );
 }
 
-export function ImportModal({
+export function ImportDrawer({
   isOpen,
   onClose,
   onImportCsv,
@@ -438,7 +437,7 @@ export function ImportModal({
   onResetImport,
   onOpenMetaSettings,
   activeMetaObjects,
-}: ImportModalProps) {
+}: ImportDrawerProps) {
   const importState = useAtomValue(importStateAtom);
   const importProgress = useAtomValue(importProgressAtom);
   const importStats = useAtomValue(importStatsAtom);
@@ -458,7 +457,7 @@ export function ImportModal({
     }
   };
 
-  // Allow closing modal anytime - import continues in background
+  // Allow closing drawer anytime - import continues in background
   const handleClose = () => {
     onClose();
   };
@@ -474,17 +473,19 @@ export function ImportModal({
       {/* Backdrop */}
       <DialogBackdrop
         transition
-        className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-[closed]:opacity-0"
+        className="fixed inset-0 bg-black/50 transition-opacity duration-300 ease-out data-[closed]:opacity-0"
       />
 
-      {/* Modal panel */}
-      <div className="fixed inset-0 flex items-center justify-center p-4">
+      {/* Drawer from left */}
+      <div className="fixed inset-0">
         <DialogPanel
           transition
-          className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transition duration-200 ease-out data-[closed]:scale-95 data-[closed]:opacity-0"
+          className="fixed inset-y-0 left-0 w-full sm:w-1/2 lg:max-w-2xl bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-out data-[closed]:-translate-x-full"
         >
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <DialogTitle className="text-lg font-semibold text-gray-900">
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+              <Upload className="w-5 h-5 text-primary" />
               {getTitle(importState)}
             </DialogTitle>
             <button

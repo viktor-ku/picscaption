@@ -7,19 +7,19 @@ import {
 } from "@headlessui/react";
 import { X, Sparkles } from "lucide-react";
 
-interface BulkUpscaleModalProps {
+interface BulkUpscaleDrawerProps {
   isOpen: boolean;
   imageCount: number;
   onClose: () => void;
   onStart: (width: number, height: number) => void;
 }
 
-export function BulkUpscaleModal({
+export function BulkUpscaleDrawer({
   isOpen,
   imageCount,
   onClose,
   onStart,
-}: BulkUpscaleModalProps) {
+}: BulkUpscaleDrawerProps) {
   const [width, setWidth] = useState(
     () => localStorage.getItem("picscaption-bulk-upscale-width") ?? "",
   );
@@ -28,7 +28,7 @@ export function BulkUpscaleModal({
   );
   const widthInputRef = useRef<HTMLInputElement>(null);
 
-  // Focus width input when modal opens
+  // Focus width input when drawer opens
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => widthInputRef.current?.focus(), 0);
@@ -62,16 +62,17 @@ export function BulkUpscaleModal({
       {/* Backdrop */}
       <DialogBackdrop
         transition
-        className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-[closed]:opacity-0"
+        className="fixed inset-0 bg-black/50 transition-opacity duration-300 ease-out data-[closed]:opacity-0"
       />
 
-      {/* Modal panel */}
-      <div className="fixed inset-0 flex items-center justify-center p-4">
+      {/* Drawer from left */}
+      <div className="fixed inset-0">
         <DialogPanel
           transition
-          className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transition duration-200 ease-out data-[closed]:scale-95 data-[closed]:opacity-0"
+          className="fixed inset-y-0 left-0 w-full sm:w-1/2 lg:max-w-2xl bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-out data-[closed]:-translate-x-full"
         >
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
             <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
               <Sparkles className="w-5 h-5 text-primary" />
               Bulk Upscale
@@ -85,7 +86,8 @@ export function BulkUpscaleModal({
             </button>
           </div>
 
-          <div className="p-6 space-y-4">
+          {/* Content */}
+          <div className="p-6 space-y-4 overflow-y-auto flex-1">
             <p className="text-sm text-gray-600">
               Upscale all {imageCount} image{imageCount !== 1 ? "s" : ""} to the
               specified dimensions.
@@ -123,8 +125,8 @@ export function BulkUpscaleModal({
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200">
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200 shrink-0">
             <button
               type="button"
               onMouseDownCapture={handleClose}

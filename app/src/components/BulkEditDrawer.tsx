@@ -5,21 +5,21 @@ import {
   DialogPanel,
   DialogTitle,
 } from "@headlessui/react";
-import { X, AlertTriangle } from "lucide-react";
+import { X, AlertTriangle, Edit3 } from "lucide-react";
 
-interface BulkEditModalProps {
+interface BulkEditDrawerProps {
   isOpen: boolean;
   imageCount: number;
   onClose: () => void;
   onOverwrite: (caption: string) => void;
 }
 
-export function BulkEditModal({
+export function BulkEditDrawer({
   isOpen,
   imageCount,
   onClose,
   onOverwrite,
-}: BulkEditModalProps) {
+}: BulkEditDrawerProps) {
   const [caption, setCaption] = useState("");
 
   const handleOverwrite = () => {
@@ -27,7 +27,7 @@ export function BulkEditModal({
     onClose();
   };
 
-  // Reset caption when modal closes
+  // Reset caption when drawer closes
   const handleClose = () => {
     setCaption("");
     onClose();
@@ -38,17 +38,19 @@ export function BulkEditModal({
       {/* Backdrop */}
       <DialogBackdrop
         transition
-        className="fixed inset-0 bg-black/50 transition-opacity duration-200 ease-out data-[closed]:opacity-0"
+        className="fixed inset-0 bg-black/50 transition-opacity duration-300 ease-out data-[closed]:opacity-0"
       />
 
-      {/* Modal panel */}
-      <div className="fixed inset-0 flex items-center justify-center p-4">
+      {/* Drawer from left */}
+      <div className="fixed inset-0">
         <DialogPanel
           transition
-          className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden transition duration-200 ease-out data-[closed]:scale-95 data-[closed]:opacity-0"
+          className="fixed inset-y-0 left-0 w-full sm:w-1/2 lg:max-w-2xl bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-out data-[closed]:-translate-x-full"
         >
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <DialogTitle className="text-lg font-semibold text-gray-900">
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+              <Edit3 className="w-5 h-5 text-primary" />
               Bulk Edit Captions
             </DialogTitle>
             <button
@@ -60,7 +62,8 @@ export function BulkEditModal({
             </button>
           </div>
 
-          <div className="p-6 space-y-4">
+          {/* Content */}
+          <div className="p-6 space-y-4 overflow-y-auto flex-1">
             {/* Warning message */}
             <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
@@ -94,8 +97,8 @@ export function BulkEditModal({
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200">
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200 shrink-0">
             <button
               type="button"
               onMouseDownCapture={handleClose}

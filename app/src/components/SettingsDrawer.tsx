@@ -25,7 +25,7 @@ export type SettingsSection =
   | "meta"
   | "profile";
 
-interface SettingsModalProps {
+interface SettingsDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   settings: Settings;
@@ -45,7 +45,7 @@ const SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: "profile", label: "Profile" },
 ];
 
-export function SettingsModal({
+export function SettingsDrawer({
   isOpen,
   onClose,
   settings,
@@ -54,7 +54,7 @@ export function SettingsModal({
   activeSection,
   onSectionChange,
   userId,
-}: SettingsModalProps) {
+}: SettingsDrawerProps) {
   const [profileName, setProfileName] = useState(settings.profileName);
   const [profileEmail, setProfileEmail] = useState(settings.profileEmail);
 
@@ -86,14 +86,14 @@ export function SettingsModal({
       {/* Backdrop */}
       <DialogBackdrop
         transition
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-200 ease-out data-[closed]:opacity-0"
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ease-out data-[closed]:opacity-0"
       />
 
-      {/* Modal container - centered */}
-      <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4">
+      {/* Drawer from left */}
+      <div className="fixed inset-0">
         <DialogPanel
           transition
-          className="w-full md:w-4/5 lg:w-3/5 xl:w-1/2 h-[80vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden transition duration-200 ease-out data-[closed]:opacity-0 data-[closed]:scale-95"
+          className="fixed inset-y-0 left-0 w-full sm:w-3/4 lg:w-2/3 xl:max-w-4xl bg-white shadow-2xl flex flex-col overflow-hidden transition-transform duration-300 ease-out data-[closed]:-translate-x-full"
         >
           <div className="flex h-full">
             {/* Sidebar */}
@@ -124,7 +124,7 @@ export function SettingsModal({
             {/* Content area */}
             <div className="flex-1 flex flex-col min-w-0">
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
                 <DialogTitle className="text-lg font-semibold text-gray-900">
                   {(() => {
                     const idx = SECTIONS.findIndex(

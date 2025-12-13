@@ -11,15 +11,15 @@ import {
   CaptionForm,
   ImagePreview,
   EmptyState,
-  KeybindingsModal,
-  BulkEditModal,
-  BulkUpscaleModal,
+  KeybindingsDrawer,
+  BulkEditDrawer,
+  BulkUpscaleDrawer,
   BulkCaptionsDrawer,
   GenerateModal,
   type GenerateOptions,
-  SettingsModal,
+  SettingsDrawer,
   DeleteAllDataModal,
-  ImportModal,
+  ImportDrawer,
   type SettingsSection,
 } from "./index";
 import { StabilityGenerateClient } from "../lib/stability-generate-client";
@@ -885,7 +885,7 @@ export function App() {
         }
       />
 
-      <ImportModal
+      <ImportDrawer
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
         onImportCsv={handleImportCsv}
@@ -911,7 +911,7 @@ export function App() {
           }))}
       />
 
-      <SettingsModal
+      <SettingsDrawer
         isOpen={isSettingsOpen}
         onClose={() => setSettingsSection(null)}
         settings={settings}
@@ -922,19 +922,19 @@ export function App() {
         userId={userId}
       />
 
-      <KeybindingsModal
+      <KeybindingsDrawer
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
       />
 
-      <BulkEditModal
+      <BulkEditDrawer
         isOpen={isBulkEditOpen}
         imageCount={images.length}
         onClose={() => setIsBulkEditOpen(false)}
         onOverwrite={handleBulkOverwrite}
       />
 
-      <BulkUpscaleModal
+      <BulkUpscaleDrawer
         isOpen={isBulkUpscaleOpen}
         imageCount={images.length}
         onClose={() => setIsBulkUpscaleOpen(false)}
