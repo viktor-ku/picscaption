@@ -19,3 +19,5 @@ export {
 } from "./ConvexClientProvider";
 export { CaptionsTab } from "./CaptionsTab";
 export { BulkCaptionsDrawer } from "./BulkCaptionsDrawer";
+export { TagInput } from "./TagInput";
+export { BulkTagsDrawer, type BulkTagMode } from "./BulkTagsDrawer";

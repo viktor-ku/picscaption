@@ -423,3 +423,54 @@ export const getMetaValuesByFilenames = query({
     return result;
   },
 });
+
+/**
+ * Get all unique tags for a user (for autocomplete).
+ * Returns sorted array of unique tag strings.
+ */
+export const getAllTags = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const images = await ctx.db
+      .query("images")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    const tagSet = new Set<string>();
+    for (const image of images) {
+      for (const tag of image.tags) {
+        tagSet.add(tag);
+      }
+    }
+
+    return Array.from(tagSet).sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase()),
+    );
+  },
+});
+
+/**
+ * Update tags for an image.
+ */
+export const updateTags = mutation({
+  args: {
+    uuid: v.string(),
+    tags: v.array(v.string()),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const image = await ctx.db
+      .query("images")
+      .withIndex("by_uuid", (q) => q.eq("uuid", args.uuid))
+      .first();
+
+    if (image && image.userId === args.userId) {
+      await ctx.db.patch(image._id, {
+        tags: args.tags,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  },
+});

@@ -7,6 +7,7 @@ export interface ImageData {
   fileName: string;
   namespace: string;
   caption: string;
+  tags: string[];
   width?: number;
   height?: number;
 }

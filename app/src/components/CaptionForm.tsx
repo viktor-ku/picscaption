@@ -1,13 +1,17 @@
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import { FileImage } from "lucide-react";
 import type { ImageData } from "../types";
+import type { Id } from "../../convex/_generated/dataModel";
 import { CaptionsTab } from "./CaptionsTab";
+import { TagInput } from "./TagInput";
 
 interface CaptionFormProps {
   selectedImage: ImageData | null;
   currentIndex: number;
   totalImages: number;
   onCaptionChange: (caption: string) => void;
+  onTagsChange: (tags: string[]) => void;
+  userId: Id<"users"> | null;
 }
 
 export function CaptionForm({
@@ -15,6 +19,8 @@ export function CaptionForm({
   currentIndex,
   totalImages,
   onCaptionChange,
+  onTagsChange,
+  userId,
 }: CaptionFormProps) {
   if (!selectedImage) {
     return (
@@ -95,6 +101,18 @@ export function CaptionForm({
                     }}
                     placeholder="Enter a caption for this image..."
                     className="flex-1 min-h-32 px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <span className="block text-sm font-medium text-gray-700 mb-1">
+                    Tags
+                  </span>
+                  <TagInput
+                    tags={selectedImage.tags}
+                    onTagsChange={onTagsChange}
+                    userId={userId}
+                    placeholder="Add tag..."
                   />
                 </div>
               </div>

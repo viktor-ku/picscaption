@@ -132,6 +132,7 @@ export function useFileHandling({
         fileName: file.name,
         namespace: directoryName,
         caption: "",
+        tags: [],
       }));
 
       // Show images in UI immediately
@@ -329,7 +330,7 @@ interface ConvexContext {
 
 /**
  * Process sidecars in background - reads existing sidecars and creates new ones.
- * Updates image state with UUIDs and captions from sidecars.
+ * Updates image state with UUIDs, captions, and tags from sidecars.
  * Syncs to Convex if available.
  */
 async function processSidecarsInBackground(
@@ -339,7 +340,10 @@ async function processSidecarsInBackground(
   convex: ConvexContext | null,
 ) {
   // Batch updates to reduce state changes
-  const updates: Map<string, { uuid?: string; caption?: string }> = new Map();
+  const updates: Map<
+    string,
+    { uuid?: string; caption?: string; tags?: string[] }
+  > = new Map();
   let hasUpdates = false;
 
   // Process all sidecars in parallel
@@ -348,11 +352,18 @@ async function processSidecarsInBackground(
       try {
         const sidecar = await readSidecar(dirHandle, img.fileName);
         if (sidecar) {
-          // Sidecar exists - use its UUID and caption
-          if (sidecar.uuid !== img.uuid || sidecar.caption !== img.caption) {
+          // Sidecar exists - use its UUID, caption, and tags
+          const tagsChanged =
+            JSON.stringify(sidecar.tags ?? []) !== JSON.stringify(img.tags);
+          if (
+            sidecar.uuid !== img.uuid ||
+            sidecar.caption !== img.caption ||
+            tagsChanged
+          ) {
             updates.set(img.id, {
               uuid: sidecar.uuid,
               caption: sidecar.caption,
+              tags: sidecar.tags ?? [],
             });
             hasUpdates = true;
           }
@@ -364,7 +375,12 @@ async function processSidecarsInBackground(
           // No sidecar - compute pHash and create one
           try {
             const pHash = await computeDHash(img.file);
-            const sidecarData = createSidecarData(img.uuid, pHash, img.caption);
+            const sidecarData = createSidecarData(
+              img.uuid,
+              pHash,
+              img.caption,
+              img.tags,
+            );
             await writeSidecar(dirHandle, img.fileName, sidecarData);
             // Sync new sidecar to Convex
             if (convex) {
@@ -387,7 +403,8 @@ async function processSidecarsInBackground(
         const idx = draft.findIndex((i) => i.id === id);
         if (idx !== -1) {
           if (update.uuid) draft[idx].uuid = update.uuid;
-          if (update.caption) draft[idx].caption = update.caption;
+          if (update.caption !== undefined) draft[idx].caption = update.caption;
+          if (update.tags) draft[idx].tags = update.tags;
         }
       }
     });

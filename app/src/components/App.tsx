@@ -15,6 +15,8 @@ import {
   BulkEditDrawer,
   BulkUpscaleDrawer,
   BulkCaptionsDrawer,
+  BulkTagsDrawer,
+  type BulkTagMode,
   GenerateModal,
   type GenerateOptions,
   SettingsDrawer,
@@ -97,6 +99,7 @@ export function App() {
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isBulkUpscaleOpen, setIsBulkUpscaleOpen] = useState(false);
   const [isBulkCaptionsOpen, setIsBulkCaptionsOpen] = useState(false);
+  const [isBulkTagsOpen, setIsBulkTagsOpen] = useState(false);
   const [isDeleteAllDataOpen, setIsDeleteAllDataOpen] = useState(false);
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -286,6 +289,38 @@ export function App() {
       });
     },
     [selectedImageId, setImages],
+  );
+
+  const handleTagsChange = useCallback(
+    (tags: string[]) => {
+      if (!selectedImageId) return;
+      setImages((draft) => {
+        const idx = draft.findIndex((i) => i.id === selectedImageId);
+        if (idx !== -1) draft[idx].tags = tags;
+      });
+    },
+    [selectedImageId, setImages],
+  );
+
+  const handleBulkTags = useCallback(
+    (tags: string[], mode: BulkTagMode) => {
+      setImages((draft) => {
+        for (const img of draft) {
+          if (mode === "replace") {
+            img.tags = [...tags];
+          } else {
+            // Add mode: merge tags, avoiding duplicates
+            const existingSet = new Set(img.tags);
+            for (const tag of tags) {
+              if (!existingSet.has(tag)) {
+                img.tags.push(tag);
+              }
+            }
+          }
+        }
+      });
+    },
+    [setImages],
   );
 
   const handleSelectImage = useCallback(
@@ -803,6 +838,7 @@ export function App() {
             fileName,
             namespace: currentDirectory ?? undefined,
             caption: options.prompt, // Use prompt as initial caption
+            tags: [],
             file,
             thumbnailUrl,
             fullImageUrl,
@@ -879,6 +915,7 @@ export function App() {
         onBulkEdit={() => setIsBulkEditOpen(true)}
         onBulkUpscale={() => setIsBulkUpscaleOpen(true)}
         onBulkCaption={() => setIsBulkCaptionsOpen(true)}
+        onBulkTags={() => setIsBulkTagsOpen(true)}
         bulkUpscaleProgress={bulkUpscaleProgress}
         bulkCaptionProgress={
           bulkCaptionState === "captioning" ? bulkCaptionProgress : null
@@ -953,6 +990,14 @@ export function App() {
         userId={userId}
       />
 
+      <BulkTagsDrawer
+        isOpen={isBulkTagsOpen}
+        imageCount={images.length}
+        onClose={() => setIsBulkTagsOpen(false)}
+        onApply={handleBulkTags}
+        userId={userId}
+      />
+
       <DeleteAllDataModal
         isOpen={isDeleteAllDataOpen}
         onClose={() => setIsDeleteAllDataOpen(false)}
@@ -996,6 +1041,8 @@ export function App() {
               currentIndex={currentIndex}
               totalImages={images.length}
               onCaptionChange={handleCaptionChange}
+              onTagsChange={handleTagsChange}
+              userId={userId}
             />
           </div>
 

@@ -41,6 +41,7 @@ interface HeaderProps {
   onBulkEdit: () => void;
   onBulkUpscale: () => void;
   onBulkCaption: () => void;
+  onBulkTags: () => void;
   bulkUpscaleProgress?: BulkUpscaleProgress | null;
   bulkCaptionProgress?: BulkCaptionProgress | null;
 }
@@ -55,6 +56,7 @@ export function Header({
   onBulkEdit,
   onBulkUpscale,
   onBulkCaption,
+  onBulkTags,
   bulkUpscaleProgress,
   bulkCaptionProgress,
 }: HeaderProps) {
@@ -226,6 +228,20 @@ export function Header({
                         )}
                       >
                         <span className="font-medium">Bulk Edit</span>
+                      </button>
+                    )}
+                  </MenuItem>
+                  <MenuItem>
+                    {({ focus }) => (
+                      <button
+                        type="button"
+                        onMouseDownCapture={() => onBulkTags()}
+                        className={clsx(
+                          "w-full px-4 py-2.5 text-left text-sm text-gray-700 flex items-center gap-2 border-t border-gray-100 transition-colors cursor-pointer",
+                          focus && "bg-gray-50",
+                        )}
+                      >
+                        <span className="font-medium">Bulk Tags</span>
                       </button>
                     )}
                   </MenuItem>
