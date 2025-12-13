@@ -147,6 +147,33 @@ export const bulkCaptionStatsAtom = atom<BulkCaptionStats | null>(null);
 export const bulkCaptionCancelledAtom = atom<boolean>(false);
 
 // ============================================================================
+// Multi-Model Generation State Atoms
+// ============================================================================
+
+/** Generation state: idle, generating, done, or cancelled */
+export type GenerateState = "idle" | "generating" | "done" | "cancelled";
+export const generateStateAtom = atom<GenerateState>("idle");
+
+/** Generation progress (current job / total jobs) */
+export interface GenerateProgress {
+  current: number;
+  total: number;
+  currentModel: string;
+}
+export const generateProgressAtom = atom<GenerateProgress | null>(null);
+
+/** Signal to cancel ongoing generation */
+export const generateCancelledAtom = atom<boolean>(false);
+
+/** Selected models for generation (persisted to localStorage) */
+export const generateSelectedModelsAtom = atomWithStorage<string[]>(
+  "picscaption-generate-models",
+  [],
+  undefined,
+  { getOnInit: true },
+);
+
+// ============================================================================
 // Derived Atoms (computed from other atoms)
 // ============================================================================
 

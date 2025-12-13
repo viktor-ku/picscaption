@@ -5,41 +5,31 @@ import {
   DialogPanel,
   DialogTitle,
 } from "@headlessui/react";
-import { X, Sparkles, Loader2, FolderOpen, HelpCircle } from "lucide-react";
 import {
-  LOCAL_MODELS,
-  type LocalGenerateModel,
-} from "../lib/ai3-upscale-client";
+  X,
+  Sparkles,
+  Loader2,
+  FolderOpen,
+  HelpCircle,
+  Check,
+  Cloud,
+  Server,
+} from "lucide-react";
+import { useAtom, useAtomValue } from "jotai";
+import clsx from "clsx";
 import {
-  STABILITY_MODELS,
-  type StabilityModel,
-} from "../lib/stability-generate-client";
-
-type Provider = "local" | "stability";
-
-interface GenerateModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onGenerate: (options: GenerateOptions) => Promise<void>;
-  isGenerating: boolean;
-  availableLocalModels?: LocalGenerateModel[];
-  saveDirName?: string | null;
-  onSelectFolder?: () => Promise<boolean> | void;
-}
-
-export interface GenerateOptions {
-  provider: Provider;
-  model: LocalGenerateModel | StabilityModel;
-  prompt: string;
-  negativePrompt?: string;
-  width?: number;
-  height?: number;
-  aspectRatio?: string;
-  seed?: number;
-  steps?: number;
-  cfgScale?: number;
-  repeat?: number;
-}
+  generateSelectedModelsAtom,
+  generateStateAtom,
+  generateProgressAtom,
+} from "../lib/store";
+import {
+  GENERATE_MODELS,
+  getStabilityModels,
+  getLocalModels,
+  type GenerateModelId,
+  type MultiGenerateOptions,
+} from "../lib/generate-models";
+import type { LocalGenerateModel } from "../lib/ai3-upscale-client";
 
 const ASPECT_RATIOS = [
   { value: "1:1", label: "1:1 (Square)" },
@@ -50,76 +40,34 @@ const ASPECT_RATIOS = [
   { value: "21:9", label: "21:9 (Ultra-wide)" },
 ];
 
-const STORAGE_KEY_PROVIDER = "generate-provider";
-const STORAGE_KEY_LOCAL_MODEL = "generate-local-model";
-const STORAGE_KEY_STABILITY_MODEL = "generate-stability-model";
-
-function loadSavedPreferences(): {
-  provider: Provider;
-  localModel: LocalGenerateModel;
-  stabilityModel: StabilityModel;
-} {
-  try {
-    const provider =
-      (localStorage.getItem(STORAGE_KEY_PROVIDER) as Provider) || "stability";
-    const localModel =
-      (localStorage.getItem(STORAGE_KEY_LOCAL_MODEL) as LocalGenerateModel) ||
-      "sdxl";
-    const stabilityModel =
-      (localStorage.getItem(STORAGE_KEY_STABILITY_MODEL) as StabilityModel) ||
-      "sd3.5-large";
-    return { provider, localModel, stabilityModel };
-  } catch {
-    return {
-      provider: "stability",
-      localModel: "sdxl",
-      stabilityModel: "sd3.5-large",
-    };
-  }
+interface GenerateModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onGenerate: (options: MultiGenerateOptions) => Promise<void>;
+  availableLocalModels?: LocalGenerateModel[];
+  saveDirName?: string | null;
+  onSelectFolder?: () => Promise<boolean> | void;
 }
+
+// Re-export for backwards compatibility
+export type { MultiGenerateOptions as GenerateOptions };
 
 export function GenerateModal({
   isOpen,
   onClose,
   onGenerate,
-  isGenerating,
   availableLocalModels = [],
   saveDirName,
   onSelectFolder,
 }: GenerateModalProps) {
-  // Load saved preferences on mount
-  const savedPrefs = loadSavedPreferences();
-
-  // Provider and model selection
-  const [provider, setProviderState] = useState<Provider>(savedPrefs.provider);
-  const [localModel, setLocalModelState] = useState<LocalGenerateModel>(
-    savedPrefs.localModel,
+  // Jotai atoms for selected models (persisted) and generation state
+  const [selectedModels, setSelectedModels] = useAtom(
+    generateSelectedModelsAtom,
   );
-  const [stabilityModel, setStabilityModelState] = useState<StabilityModel>(
-    savedPrefs.stabilityModel,
-  );
+  const generateState = useAtomValue(generateStateAtom);
+  const generateProgress = useAtomValue(generateProgressAtom);
 
-  // Wrapper functions that also save to localStorage
-  const setProvider = useCallback((p: Provider) => {
-    setProviderState(p);
-    try {
-      localStorage.setItem(STORAGE_KEY_PROVIDER, p);
-    } catch {}
-  }, []);
-
-  const setLocalModel = useCallback((m: LocalGenerateModel) => {
-    setLocalModelState(m);
-    try {
-      localStorage.setItem(STORAGE_KEY_LOCAL_MODEL, m);
-    } catch {}
-  }, []);
-
-  const setStabilityModel = useCallback((m: StabilityModel) => {
-    setStabilityModelState(m);
-    try {
-      localStorage.setItem(STORAGE_KEY_STABILITY_MODEL, m);
-    } catch {}
-  }, []);
+  const isGenerating = generateState === "generating";
 
   // Generation parameters
   const [prompt, setPrompt] = useState("");
@@ -135,23 +83,49 @@ export function GenerateModal({
   // UI state
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
-  // Get current model info
-  const currentLocalModelInfo = LOCAL_MODELS.find((m) => m.id === localModel);
-  const currentStabilityModelInfo = STABILITY_MODELS.find(
-    (m) => m.id === stabilityModel,
+  // Get models grouped by provider
+  const stabilityModels = getStabilityModels();
+  const localModels = getLocalModels();
+
+  // Check if a local model is available
+  const isLocalModelAvailable = useCallback(
+    (modelId: GenerateModelId) => {
+      const apiModelId = modelId.split(":")[1];
+      return availableLocalModels.includes(apiModelId as LocalGenerateModel);
+    },
+    [availableLocalModels],
   );
 
-  const isLocalProvider = provider === "local";
-  const currentModel = isLocalProvider ? localModel : stabilityModel;
-  const supportsNegativePrompt = isLocalProvider
-    ? currentLocalModelInfo?.supportsNegativePrompt
-    : currentStabilityModelInfo?.supportsNegativePrompt;
-  const supportsDimensions = isLocalProvider
-    ? true
-    : currentStabilityModelInfo?.supportsDimensions;
-  const supportsAspectRatio = isLocalProvider
-    ? false
-    : currentStabilityModelInfo?.supportsAspectRatio;
+  // Toggle model selection
+  const toggleModel = useCallback(
+    (modelId: GenerateModelId) => {
+      setSelectedModels((prev) => {
+        if (prev.includes(modelId)) {
+          return prev.filter((id) => id !== modelId);
+        }
+        return [...prev, modelId];
+      });
+    },
+    [setSelectedModels],
+  );
+
+  // Check if any selected model supports negative prompt
+  const anySupportsNegativePrompt = selectedModels.some((id) => {
+    const model = GENERATE_MODELS.find((m) => m.id === id);
+    return model?.supportsNegativePrompt;
+  });
+
+  // Check if any selected model supports dimensions
+  const anyModelSupportsDimensions = selectedModels.some((id) => {
+    const model = GENERATE_MODELS.find((m) => m.id === id);
+    return model?.supportsDimensions;
+  });
+
+  // Check if any selected model supports aspect ratio
+  const anyModelSupportsAspectRatio = selectedModels.some((id) => {
+    const model = GENERATE_MODELS.find((m) => m.id === id);
+    return model?.supportsAspectRatio;
+  });
 
   // Focus prompt input when modal opens
   useEffect(() => {
@@ -160,34 +134,26 @@ export function GenerateModal({
     }
   }, [isOpen]);
 
-  // Update steps when model changes
-  useEffect(() => {
-    if (isLocalProvider && currentLocalModelInfo) {
-      setSteps(String(currentLocalModelInfo.defaultSteps));
-    }
-  }, [isLocalProvider, currentLocalModelInfo]);
-
   const handleGenerate = useCallback(async () => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim() || selectedModels.length === 0) return;
 
-    const options: GenerateOptions = {
-      provider,
-      model: currentModel,
+    const options: MultiGenerateOptions = {
+      models: selectedModels as GenerateModelId[],
       prompt: prompt.trim(),
     };
 
-    if (supportsNegativePrompt && negativePrompt.trim()) {
+    if (anySupportsNegativePrompt && negativePrompt.trim()) {
       options.negativePrompt = negativePrompt.trim();
     }
 
-    if (supportsDimensions) {
+    if (anyModelSupportsDimensions) {
       const w = Number.parseInt(width, 10);
       const h = Number.parseInt(height, 10);
       if (w > 0) options.width = w;
       if (h > 0) options.height = h;
     }
 
-    if (supportsAspectRatio) {
+    if (anyModelSupportsAspectRatio) {
       options.aspectRatio = aspectRatio;
     }
 
@@ -205,8 +171,7 @@ export function GenerateModal({
 
     await onGenerate(options);
   }, [
-    provider,
-    currentModel,
+    selectedModels,
     prompt,
     negativePrompt,
     width,
@@ -216,20 +181,23 @@ export function GenerateModal({
     steps,
     cfgScale,
     repeat,
-    supportsNegativePrompt,
-    supportsDimensions,
-    supportsAspectRatio,
+    anySupportsNegativePrompt,
+    anyModelSupportsDimensions,
+    anyModelSupportsAspectRatio,
     onGenerate,
   ]);
 
+  // Allow closing even during generation (background generation continues)
   const handleClose = () => {
-    if (!isGenerating) {
-      onClose();
-    }
+    onClose();
   };
 
-  const isValid = prompt.trim().length > 0;
+  const isValid = prompt.trim().length > 0 && selectedModels.length > 0;
   const hasLocalModels = availableLocalModels.length > 0;
+
+  // Calculate total jobs
+  const repeatCount = Math.max(1, Number.parseInt(repeat, 10) || 1);
+  const totalJobs = selectedModels.length * repeatCount;
 
   return (
     <Dialog open={isOpen} onClose={handleClose} className="relative z-50">
@@ -253,8 +221,7 @@ export function GenerateModal({
             <button
               type="button"
               onMouseDownCapture={handleClose}
-              disabled={isGenerating}
-              className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer disabled:opacity-50"
+              className="p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -262,77 +229,128 @@ export function GenerateModal({
 
           {/* Content */}
           <div className="p-6 space-y-5 overflow-y-auto flex-1">
-            {/* Provider Selection */}
+            {/* Model Selection with Checkboxes */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Provider
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Models{" "}
+                <span className="text-gray-400 font-normal">
+                  (select one or more)
+                </span>
               </label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setProvider("stability")}
-                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
-                    provider === "stability"
-                      ? "bg-primary text-white border-primary"
-                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                  }`}
-                >
-                  Stability AI
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setProvider("local")}
-                  disabled={!hasLocalModels}
-                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
-                    provider === "local"
-                      ? "bg-primary text-white border-primary"
-                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  title={
-                    !hasLocalModels ? "No local server available" : undefined
-                  }
-                >
-                  Local (ai3)
-                </button>
-              </div>
-            </div>
 
-            {/* Model Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Model
-              </label>
-              {isLocalProvider ? (
-                <select
-                  value={localModel}
-                  onChange={(e) =>
-                    setLocalModel(e.target.value as LocalGenerateModel)
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                >
-                  {LOCAL_MODELS.filter((m) =>
-                    availableLocalModels.includes(m.id),
-                  ).map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} - {m.description}
-                    </option>
+              {/* Stability AI Models */}
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Cloud className="w-4 h-4 text-blue-500" />
+                  <span className="text-sm font-medium text-gray-600">
+                    Stability AI
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {stabilityModels.map((model) => (
+                    <label
+                      key={model.id}
+                      className={clsx(
+                        "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors",
+                        selectedModels.includes(model.id)
+                          ? "bg-primary/10 border border-primary/30"
+                          : "bg-gray-50 border border-transparent hover:bg-gray-100",
+                      )}
+                    >
+                      <div
+                        className={clsx(
+                          "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
+                          selectedModels.includes(model.id)
+                            ? "bg-primary border-primary"
+                            : "border-gray-300",
+                        )}
+                      >
+                        {selectedModels.includes(model.id) && (
+                          <Check className="w-3 h-3 text-white" />
+                        )}
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={selectedModels.includes(model.id)}
+                        onChange={() => toggleModel(model.id)}
+                        className="sr-only"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900">
+                          {model.name}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate">
+                          {model.description}
+                        </div>
+                      </div>
+                    </label>
                   ))}
-                </select>
-              ) : (
-                <select
-                  value={stabilityModel}
-                  onChange={(e) =>
-                    setStabilityModel(e.target.value as StabilityModel)
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                >
-                  {STABILITY_MODELS.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} - {m.description}
-                    </option>
-                  ))}
-                </select>
-              )}
+                </div>
+              </div>
+
+              {/* Local Models */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Server className="w-4 h-4 text-green-500" />
+                  <span className="text-sm font-medium text-gray-600">
+                    Local (ai3)
+                  </span>
+                  {!hasLocalModels && (
+                    <span className="text-xs text-amber-600">
+                      (server unavailable)
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  {localModels.map((model) => {
+                    const available = isLocalModelAvailable(model.id);
+                    return (
+                      <label
+                        key={model.id}
+                        className={clsx(
+                          "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
+                          !available
+                            ? "opacity-50 cursor-not-allowed"
+                            : "cursor-pointer",
+                          selectedModels.includes(model.id)
+                            ? "bg-primary/10 border border-primary/30"
+                            : available
+                              ? "bg-gray-50 border border-transparent hover:bg-gray-100"
+                              : "bg-gray-50 border border-transparent",
+                        )}
+                      >
+                        <div
+                          className={clsx(
+                            "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
+                            selectedModels.includes(model.id)
+                              ? "bg-primary border-primary"
+                              : "border-gray-300",
+                          )}
+                        >
+                          {selectedModels.includes(model.id) && (
+                            <Check className="w-3 h-3 text-white" />
+                          )}
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={selectedModels.includes(model.id)}
+                          onChange={() => available && toggleModel(model.id)}
+                          disabled={!available}
+                          className="sr-only"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900">
+                            {model.name}
+                          </div>
+                          <div className="text-xs text-gray-500 truncate">
+                            {model.description}
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             {/* Prompt */}
@@ -351,7 +369,7 @@ export function GenerateModal({
             </div>
 
             {/* Negative Prompt (conditional) */}
-            {supportsNegativePrompt && (
+            {anySupportsNegativePrompt && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Negative Prompt{" "}
@@ -367,8 +385,8 @@ export function GenerateModal({
               </div>
             )}
 
-            {/* Dimensions or Aspect Ratio */}
-            {supportsDimensions && (
+            {/* Dimensions (show if any model supports it) */}
+            {anyModelSupportsDimensions && (
               <div className="flex gap-4">
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -401,7 +419,8 @@ export function GenerateModal({
               </div>
             )}
 
-            {supportsAspectRatio && (
+            {/* Aspect Ratio (show if any model supports it) */}
+            {anyModelSupportsAspectRatio && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Aspect Ratio
@@ -429,7 +448,7 @@ export function GenerateModal({
                 <div className="relative group">
                   <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
                   <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-10">
-                    Generate multiple images with the same parameters.
+                    Generate multiple images per model.
                     <br />
                     Each image will have a unique seed.
                     <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
@@ -493,6 +512,29 @@ export function GenerateModal({
 
           {/* Footer */}
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 shrink-0 space-y-3">
+            {/* Progress indicator when generating */}
+            {isGenerating && generateProgress && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Generating...</span>
+                  <span className="text-gray-900 font-medium tabular-nums">
+                    {generateProgress.current}/{generateProgress.total}
+                  </span>
+                </div>
+                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all duration-300 ease-out"
+                    style={{
+                      width: `${(generateProgress.current / generateProgress.total) * 100}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-gray-500">
+                  Current: {generateProgress.currentModel.split(":")[1]}
+                </p>
+              </div>
+            )}
+
             {/* Save location */}
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2 text-gray-600">
@@ -523,36 +565,52 @@ export function GenerateModal({
             </div>
 
             {/* Action buttons */}
-            <div className="flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onMouseDownCapture={handleClose}
-                disabled={isGenerating}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onMouseDownCapture={handleGenerate}
-                disabled={!isValid || isGenerating || !saveDirName}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-hover transition-colors cursor-pointer disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
-                title={
-                  !saveDirName ? "Please select a folder first" : undefined
-                }
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    Generate
-                  </>
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-500">
+                {selectedModels.length > 0 && (
+                  <span>
+                    {selectedModels.length} model
+                    {selectedModels.length !== 1 ? "s" : ""} × {repeatCount} ={" "}
+                    <span className="font-medium text-gray-700">
+                      {totalJobs} image{totalJobs !== 1 ? "s" : ""}
+                    </span>
+                  </span>
                 )}
-              </button>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onMouseDownCapture={handleClose}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  {isGenerating ? "Close" : "Cancel"}
+                </button>
+                <button
+                  type="button"
+                  onMouseDownCapture={handleGenerate}
+                  disabled={!isValid || isGenerating || !saveDirName}
+                  className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-hover transition-colors cursor-pointer disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+                  title={
+                    !saveDirName
+                      ? "Please select a folder first"
+                      : selectedModels.length === 0
+                        ? "Please select at least one model"
+                        : undefined
+                  }
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      Generate
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </DialogPanel>

@@ -10,12 +10,15 @@ import {
   ChevronDown,
   Settings,
   Sparkles,
+  Wand2,
 } from "lucide-react";
 import clsx from "clsx";
 import {
   importStateAtom,
   importProgressAtom,
   importStatsAtom,
+  generateStateAtom,
+  generateProgressAtom,
 } from "../lib/store";
 
 type SaveStatus = "saving" | "saved" | null;
@@ -42,6 +45,7 @@ interface HeaderProps {
   onBulkUpscale: () => void;
   onBulkCaption: () => void;
   onBulkTags: () => void;
+  onOpenGenerate: () => void;
   bulkUpscaleProgress?: BulkUpscaleProgress | null;
   bulkCaptionProgress?: BulkCaptionProgress | null;
 }
@@ -57,6 +61,7 @@ export function Header({
   onBulkUpscale,
   onBulkCaption,
   onBulkTags,
+  onOpenGenerate,
   bulkUpscaleProgress,
   bulkCaptionProgress,
 }: HeaderProps) {
@@ -77,6 +82,16 @@ export function Header({
   const importState = useAtomValue(importStateAtom);
   const importProgress = useAtomValue(importProgressAtom);
   const importStats = useAtomValue(importStatsAtom);
+
+  // Generation state from Jotai
+  const generateState = useAtomValue(generateStateAtom);
+  const generateProgress = useAtomValue(generateProgressAtom);
+  const isGenerating = generateState === "generating";
+  const generateDone = generateState === "done";
+  const generateProgressPercent =
+    generateProgress && generateProgress.total > 0
+      ? (generateProgress.current / generateProgress.total) * 100
+      : 0;
 
   // Track "done" state visibility for animation (10 seconds)
   const [showDone, setShowDone] = useState(false);
@@ -127,6 +142,36 @@ export function Header({
           <Image className="w-7 h-7 text-primary" />
         </div>
         <div className="flex items-center gap-4">
+          {/* Generation progress badge */}
+          {(isGenerating || generateDone) && (
+            <button
+              type="button"
+              onClick={onOpenGenerate}
+              className={clsx(
+                "flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full transition-all duration-300 cursor-pointer",
+                generateDone
+                  ? "text-green-600 bg-green-50"
+                  : "text-primary bg-primary/10",
+              )}
+            >
+              {generateDone ? (
+                <>
+                  <Check className="w-3 h-3" />
+                  Done
+                </>
+              ) : (
+                <>
+                  <Wand2 className="w-3 h-3" />
+                  <span className="tabular-nums">
+                    {generateProgress
+                      ? `${generateProgress.current}/${generateProgress.total}`
+                      : "0/0"}
+                  </span>
+                </>
+              )}
+            </button>
+          )}
+
           {saveStatus && (
             <span
               className={clsx(
@@ -423,6 +468,23 @@ export function Header({
             <span className="text-xs text-gray-500 tabular-nums whitespace-nowrap">
               {bulkCaptionProgress.current}/{bulkCaptionProgress.total}{" "}
               captioned
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Generation progress bar */}
+      {isGenerating && generateProgress && (
+        <div className="px-6 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-300 ease-out"
+                style={{ width: `${generateProgressPercent}%` }}
+              />
+            </div>
+            <span className="text-xs text-gray-500 tabular-nums whitespace-nowrap">
+              {generateProgress.current}/{generateProgress.total} generated
             </span>
           </div>
         </div>

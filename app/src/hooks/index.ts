@@ -21,3 +21,8 @@ export {
   type UseBulkCaptionOptions,
   type UseBulkCaptionReturn,
 } from "./useBulkCaption";
+export {
+  useMultiGenerate,
+  type UseMultiGenerateOptions,
+  type UseMultiGenerateReturn,
+} from "./useMultiGenerate";

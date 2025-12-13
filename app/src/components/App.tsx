@@ -18,20 +18,12 @@ import {
   BulkTagsDrawer,
   type BulkTagMode,
   GenerateModal,
-  type GenerateOptions,
   SettingsDrawer,
   DeleteAllDataModal,
   ImportDrawer,
   type SettingsSection,
 } from "./index";
-import { StabilityGenerateClient } from "../lib/stability-generate-client";
-import {
-  UpscaleClient,
-  type LocalGenerateModel,
-} from "../lib/ai3-upscale-client";
-import type { ImageData } from "../types";
-import { generateThumbnail } from "../lib/thumbnail";
-import { generateUUID } from "../lib/image-identity";
+import { type LocalGenerateModel } from "../lib/ai3-upscale-client";
 import { ResizeHandle } from "./ResizeHandle";
 import type { Settings, MetaObject } from "../lib/settings";
 import { exportCaptions } from "../lib/export";
@@ -69,7 +61,9 @@ import {
   useBulkUpscale,
   useBulkCaption,
   useUser,
+  useMultiGenerate,
 } from "../hooks";
+import type { MultiGenerateOptions } from "../lib/generate-models";
 
 export function App() {
   // Global state from atoms
@@ -102,7 +96,6 @@ export function App() {
   const [isBulkTagsOpen, setIsBulkTagsOpen] = useState(false);
   const [isDeleteAllDataOpen, setIsDeleteAllDataOpen] = useState(false);
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [settingsSection, setSettingsSection] =
     useState<SettingsSection | null>(() => {
       if (typeof window === "undefined") return null;
@@ -115,9 +108,6 @@ export function App() {
         : null;
     });
   const isSettingsOpen = settingsSection !== null;
-
-  // Generation clients
-  const stabilityGenerateClient = useRef(new StabilityGenerateClient()).current;
 
   // User hook for Convex user ID
   const { userId, ensureUser } = useUser();
@@ -189,6 +179,12 @@ export function App() {
     availableModels: bulkCaptionModels,
     isAvailable: isBulkCaptionAvailable,
   } = useBulkCaption();
+
+  // Multi-model generation hook
+  const { startGeneration, availableLocalModels } = useMultiGenerate({
+    ai3ServerUrl: settings.upscaleServerUrl,
+    directoryHandle: directoryHandleRef.current,
+  });
 
   // Pane resize hook
   const {
@@ -705,45 +701,9 @@ export function App() {
     [images, directoryHandleRef, setImages],
   );
 
-  // Get available local models from ai3 server
-  const { data: ai3Capabilities } = useQuery({
-    queryKey: ["ai3-capabilities", settings.upscaleServerUrl],
-    queryFn: async () => {
-      if (!ai3UpscaleClient) return null;
-      return ai3UpscaleClient.capabilities();
-    },
-    enabled: ai3UpscaleClient !== null,
-    retry: false,
-    staleTime: 60000, // Cache for 1 minute
-  });
-
-  const availableLocalModels: LocalGenerateModel[] =
-    ai3Capabilities?.capabilities
-      ?.filter((c) => c.kind === "image")
-      .map((c) => c.model as LocalGenerateModel) ?? [];
-
-  // Helper to save generated file to the current directory
-  // Note: Permission should already be granted before calling this
-  const saveGeneratedFile = useCallback(
-    async (blob: Blob, fileName: string): Promise<void> => {
-      const dirHandle = directoryHandleRef.current;
-
-      if (!dirHandle) {
-        throw new Error("No folder selected");
-      }
-
-      const fileHandle = await dirHandle.getFileHandle(fileName, {
-        create: true,
-      });
-      const writable = await fileHandle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-    },
-    [directoryHandleRef],
-  );
-
+  // Handle multi-model generation
   const handleGenerate = useCallback(
-    async (options: GenerateOptions) => {
+    async (options: MultiGenerateOptions) => {
       // Require a folder to be selected first
       if (!directoryHandleRef.current) {
         toast.error("Please select a folder first to save generated images.");
@@ -770,122 +730,16 @@ export function App() {
         return;
       }
 
-      setIsGenerating(true);
-      const repeatCount = options.repeat ?? 1;
-      let lastImageId: string | null = null;
-      let successCount = 0;
+      // Start generation via the hook (handles background generation)
+      await startGeneration(options);
 
-      try {
-        for (let i = 0; i < repeatCount; i++) {
-          let blob: Blob;
-
-          if (options.provider === "local") {
-            if (!ai3UpscaleClient) {
-              throw new Error("Local ai3 server not configured");
-            }
-            blob = await ai3UpscaleClient.generate({
-              prompt: options.prompt,
-              negativePrompt: options.negativePrompt,
-              width: options.width,
-              height: options.height,
-              seed: options.seed ? options.seed + i : undefined, // Increment seed for each iteration
-              steps: options.steps,
-              guidance: options.cfgScale,
-              model: options.model as LocalGenerateModel,
-            });
-          } else {
-            blob = await stabilityGenerateClient.generate({
-              model: options.model as Parameters<
-                typeof stabilityGenerateClient.generate
-              >[0]["model"],
-              prompt: options.prompt,
-              negativePrompt: options.negativePrompt,
-              width: options.width,
-              height: options.height,
-              aspectRatio: options.aspectRatio,
-              seed: options.seed ? options.seed + i : undefined, // Increment seed for each iteration
-              steps: options.steps,
-              cfgScale: options.cfgScale,
-            });
-          }
-
-          // Create a unique filename for the generated image
-          const timestamp = Date.now();
-          const fileName = `generated_${timestamp}.png`;
-
-          // Save to the current working directory (same as imported images)
-          await saveGeneratedFile(blob, fileName);
-
-          // Create File object from blob
-          const file = new File([blob], fileName, { type: "image/png" });
-          const fullImageUrl = URL.createObjectURL(file);
-
-          // Generate thumbnail
-          const thumbnailUrl = await generateThumbnail(file);
-
-          // Get image dimensions
-          const img = new Image();
-          await new Promise<void>((resolve, reject) => {
-            img.onload = () => resolve();
-            img.onerror = reject;
-            img.src = fullImageUrl;
-          });
-
-          // Create new ImageData
-          const newImage: ImageData = {
-            id: `generated-${timestamp}`,
-            uuid: generateUUID(),
-            fileName,
-            namespace: currentDirectory ?? undefined,
-            caption: options.prompt, // Use prompt as initial caption
-            tags: [],
-            file,
-            thumbnailUrl,
-            fullImageUrl,
-            width: img.width,
-            height: img.height,
-          };
-
-          // Add to images array
-          setImages((draft) => {
-            draft.push(newImage);
-          });
-          lastImageId = newImage.id;
-          successCount++;
-        }
-
-        // Select the last generated image
-        if (lastImageId) {
-          setSelectedImageId(lastImageId);
-        }
-
-        const message =
-          repeatCount > 1
-            ? `Generated ${successCount} images successfully!`
-            : "Image generated successfully!";
-        toast.success(message);
-        setIsGenerateModalOpen(false);
-      } catch (err) {
-        console.error("Generation failed:", err);
-        const errorMsg =
-          err instanceof Error ? err.message : "Failed to generate image";
-        if (successCount > 0) {
-          toast.error(`${errorMsg} (${successCount}/${repeatCount} completed)`);
-        } else {
-          toast.error(errorMsg);
-        }
-      } finally {
-        setIsGenerating(false);
-      }
+      // Show toast notification
+      const totalJobs = options.models.length * (options.repeat ?? 1);
+      toast.success(
+        `Started generating ${totalJobs} image${totalJobs !== 1 ? "s" : ""}...`,
+      );
     },
-    [
-      ai3UpscaleClient,
-      stabilityGenerateClient,
-      setImages,
-      setSelectedImageId,
-      saveGeneratedFile,
-      currentDirectory,
-    ],
+    [startGeneration],
   );
 
   return (
@@ -916,6 +770,7 @@ export function App() {
         onBulkUpscale={() => setIsBulkUpscaleOpen(true)}
         onBulkCaption={() => setIsBulkCaptionsOpen(true)}
         onBulkTags={() => setIsBulkTagsOpen(true)}
+        onOpenGenerate={() => setIsGenerateModalOpen(true)}
         bulkUpscaleProgress={bulkUpscaleProgress}
         bulkCaptionProgress={
           bulkCaptionState === "captioning" ? bulkCaptionProgress : null
@@ -1008,7 +863,6 @@ export function App() {
         isOpen={isGenerateModalOpen}
         onClose={() => setIsGenerateModalOpen(false)}
         onGenerate={handleGenerate}
-        isGenerating={isGenerating}
         availableLocalModels={availableLocalModels}
         saveDirName={currentDirectory}
         onSelectFolder={handleSelectSaveFolder}
