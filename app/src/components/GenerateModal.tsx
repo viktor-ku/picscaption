@@ -5,15 +5,7 @@ import {
   DialogPanel,
   DialogTitle,
 } from "@headlessui/react";
-import {
-  X,
-  Sparkles,
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-  FolderOpen,
-  HelpCircle,
-} from "lucide-react";
+import { X, Sparkles, Loader2, FolderOpen, HelpCircle } from "lucide-react";
 import {
   LOCAL_MODELS,
   type LocalGenerateModel,
@@ -141,7 +133,6 @@ export function GenerateModal({
   const [cfgScale, setCfgScale] = useState("7");
 
   // UI state
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
   // Get current model info
@@ -455,65 +446,48 @@ export function GenerateModal({
               />
             </div>
 
-            {/* Advanced Options */}
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-800"
-              >
-                {showAdvanced ? (
-                  <ChevronUp className="w-4 h-4" />
-                ) : (
-                  <ChevronDown className="w-4 h-4" />
-                )}
-                Advanced Options
-              </button>
-
-              {showAdvanced && (
-                <div className="mt-3 grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Seed
-                    </label>
-                    <input
-                      type="number"
-                      value={seed}
-                      onChange={(e) => setSeed(e.target.value)}
-                      min={0}
-                      placeholder="0 = random"
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Steps
-                    </label>
-                    <input
-                      type="number"
-                      value={steps}
-                      onChange={(e) => setSteps(e.target.value)}
-                      min={1}
-                      max={100}
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      CFG Scale
-                    </label>
-                    <input
-                      type="number"
-                      value={cfgScale}
-                      onChange={(e) => setCfgScale(e.target.value)}
-                      min={0}
-                      max={20}
-                      step={0.5}
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                    />
-                  </div>
-                </div>
-              )}
+            {/* Seed, Steps, CFG Scale */}
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Seed
+                </label>
+                <input
+                  type="number"
+                  value={seed}
+                  onChange={(e) => setSeed(e.target.value)}
+                  min={0}
+                  placeholder="0 = random"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Steps
+                </label>
+                <input
+                  type="number"
+                  value={steps}
+                  onChange={(e) => setSteps(e.target.value)}
+                  min={1}
+                  max={100}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  CFG Scale
+                </label>
+                <input
+                  type="number"
+                  value={cfgScale}
+                  onChange={(e) => setCfgScale(e.target.value)}
+                  min={0}
+                  max={20}
+                  step={0.5}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+              </div>
             </div>
           </div>
 
