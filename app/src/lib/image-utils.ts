@@ -100,6 +100,31 @@ export async function resizeImage(
   return resultBlob;
 }
 
+/**
+ * Resize an image to fit within max dimensions (by longest side)
+ * Returns the original blob if already smaller than maxSize
+ */
+export async function resizeImageToMaxSize(
+  sourceBlob: Blob,
+  maxSize: number,
+): Promise<Blob> {
+  const img = await loadImage(sourceBlob);
+  const { naturalWidth, naturalHeight } = img;
+
+  // If already within limits, return original
+  const longSide = Math.max(naturalWidth, naturalHeight);
+  if (longSide <= maxSize) {
+    return sourceBlob;
+  }
+
+  // Calculate new dimensions maintaining aspect ratio
+  const scale = maxSize / longSide;
+  const targetWidth = Math.round(naturalWidth * scale);
+  const targetHeight = Math.round(naturalHeight * scale);
+
+  return resizeImage(sourceBlob, targetWidth, targetHeight);
+}
+
 export interface CropArea {
   x: number;
   y: number;

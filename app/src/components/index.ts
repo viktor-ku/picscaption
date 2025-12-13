@@ -16,3 +16,4 @@ export {
   ConvexClientProvider,
   useConvexAvailable,
 } from "./ConvexClientProvider";
+export { CaptionsTab } from "./CaptionsTab";

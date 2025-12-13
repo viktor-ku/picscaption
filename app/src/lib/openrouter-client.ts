@@ -1,3 +1,5 @@
+import { resizeImageToMaxSize } from "./image-utils";
+
 /**
  * OpenRouter Caption Client
  *
@@ -18,10 +20,15 @@
  * ```
  */
 
+/** Maximum image size (longest side) for caption requests */
+const MAX_CAPTION_IMAGE_SIZE = 1024;
+
 /** Caption options */
 export interface OpenRouterCaptionOptions {
   /** Model ID to use (required, passed through to OpenRouter API) */
   model: string;
+  /** Optional custom system prompt to customize caption generation */
+  systemPrompt?: string;
 }
 
 /** Caption response */
@@ -112,17 +119,28 @@ export class OpenRouterClient {
     image: File | Blob,
     options: OpenRouterCaptionOptions,
   ): Promise<OpenRouterCaptionResponse> {
+    // Compress image to max 1024px on longest side to save tokens
+    const compressedImage = await resizeImageToMaxSize(
+      image,
+      MAX_CAPTION_IMAGE_SIZE,
+    );
+
+    console.log(
+      `[OpenRouterClient] Image compressed: ${image.size} -> ${compressedImage.size} bytes`,
+    );
+
     const formData = new FormData();
 
-    // Add image
-    if (image instanceof File) {
-      formData.append("image", image);
-    } else {
-      formData.append("image", image, "image.png");
-    }
+    // Add compressed image
+    formData.append("image", compressedImage, "image.jpg");
 
     // Add model parameter (required)
     formData.append("model", options.model);
+
+    // Add optional system prompt
+    if (options.systemPrompt) {
+      formData.append("systemPrompt", options.systemPrompt);
+    }
 
     console.log("[OpenRouterClient] Captioning with model:", options.model);
 

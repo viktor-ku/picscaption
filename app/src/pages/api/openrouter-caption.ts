@@ -28,6 +28,7 @@ export const POST: APIRoute = async ({ request }) => {
     const formData = await request.formData();
     const image = formData.get("image");
     const model = formData.get("model") as string | null;
+    const systemPrompt = formData.get("systemPrompt") as string | null;
 
     if (!image || typeof image === "string") {
       return new Response(
@@ -82,15 +83,27 @@ export const POST: APIRoute = async ({ request }) => {
       appUrl: "https://picscaption.app",
     });
 
-    // Call OpenRouter API using SDK
+    // Use custom system prompt if provided, otherwise use default
+    const promptText = systemPrompt?.trim() || CAPTION_PROMPT;
+
+    console.log("[OpenRouter API] Using system prompt:", promptText);
+
+    // Call OpenRouter API using SDK with proper system message
     const response = await openRouter.chat.send({
       model,
       max_tokens: 500,
       messages: [
         {
+          role: "system",
+          content: promptText,
+        },
+        {
           role: "user",
           content: [
-            { type: "text", text: CAPTION_PROMPT },
+            {
+              type: "text",
+              text: "Please analyze this image and provide a caption according to your instructions.",
+            },
             { type: "image_url", imageUrl: { url: dataUrl } },
           ],
         },
@@ -104,11 +117,66 @@ export const POST: APIRoute = async ({ request }) => {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    // Log full error to console for debugging
+    console.error("[OpenRouter API] Caption generation failed:", err);
+
+    // Extract error details
+    let message = "Unknown error";
+    let status = 500;
+    let errorResponse: Record<string, unknown> | null = null;
+
+    if (err instanceof Error) {
+      message = err.message;
+
+      // Check for OpenRouter SDK error properties
+      const errWithDetails = err as Error & {
+        status?: number;
+        statusCode?: number;
+        code?: string;
+        response?: unknown;
+        data?: unknown;
+        body?: unknown;
+      };
+
+      // Try to get HTTP status from various possible properties
+      if (errWithDetails.status) {
+        status = errWithDetails.status;
+      } else if (errWithDetails.statusCode) {
+        status = errWithDetails.statusCode;
+      }
+
+      // Try to capture the full error response body
+      if (errWithDetails.response) {
+        errorResponse = { response: errWithDetails.response };
+      }
+      if (errWithDetails.data) {
+        errorResponse = { ...errorResponse, data: errWithDetails.data };
+      }
+      if (errWithDetails.body) {
+        errorResponse = { ...errorResponse, body: errWithDetails.body };
+      }
+      if (errWithDetails.code) {
+        errorResponse = { ...errorResponse, code: errWithDetails.code };
+      }
+    }
+
+    // Log structured error info
+    console.error("[OpenRouter API] Error details:", {
+      message,
+      status,
+      errorResponse,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+
     return new Response(
-      JSON.stringify({ error: "Caption failed", detail: message }),
+      JSON.stringify({
+        error: "Caption failed",
+        detail: message,
+        status,
+        ...(errorResponse && { errorResponse }),
+      }),
       {
-        status: 500,
+        status,
         headers: { "Content-Type": "application/json" },
       },
     );

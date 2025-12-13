@@ -10,6 +10,7 @@
 
 import type * as images from "../images.js";
 import type * as metaObjects from "../metaObjects.js";
+import type * as userSettings from "../userSettings.js";
 import type * as users from "../users.js";
 
 import type {
@@ -21,6 +22,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   images: typeof images;
   metaObjects: typeof metaObjects;
+  userSettings: typeof userSettings;
   users: typeof users;
 }>;
 

@@ -10,3 +10,9 @@ export { useFileHandling } from "./useFileHandling";
 export { useBulkUpscale } from "./useBulkUpscale";
 export { useUser, type UseUserReturn } from "./useUser";
 export { useCaption, type UseCaptionResult } from "./useCaption";
+export {
+  useCaptionsWorkflow,
+  type CaptionResult,
+  type UseCaptionsWorkflowOptions,
+  type UseCaptionsWorkflowReturn,
+} from "./useCaptionsWorkflow";

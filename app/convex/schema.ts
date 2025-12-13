@@ -16,7 +16,7 @@ export default defineSchema({
     uuid: v.optional(v.string()), // Unique image identity (from sidecar) - optional for metadata-first imports
     filename: v.optional(v.string()), // Original filename - optional for backward compatibility
     pHash: v.optional(v.string()), // Perceptual hash for fallback matching - optional for metadata-first imports
-    hasImage: v.optional(v.boolean()), // true when actual image file has been loaded (vs metadata-only)
+    hasImage: v.optional(v.boolean()), // Whether actual image file has been loaded (vs metadata-first import)
     caption: v.string(),
     tags: v.array(v.string()),
     createdAt: v.string(),
@@ -26,8 +26,7 @@ export default defineSchema({
     .index("by_uuid", ["uuid"])
     .index("by_user", ["userId"])
     .index("by_phash_user", ["pHash", "userId"])
-    .index("by_filename_user", ["filename", "userId"])
-    .index("by_user_hasImage", ["userId", "hasImage"]),
+    .index("by_filename_user", ["filename", "userId"]),
 
   metaObjects: defineTable({
     name: v.string(), // Field name / key (e.g., "guidance", "steps")
@@ -55,4 +54,11 @@ export default defineSchema({
     .index("by_meta_object", ["metaObjectId"])
     .index("by_user", ["userId"])
     .index("by_image_meta", ["imageId", "metaObjectId"]),
+
+  // Stores per-user settings like system prompts
+  userSettings: defineTable({
+    userId: v.id("users"),
+    captionSystemPrompt: v.optional(v.string()),
+    updatedAt: v.string(),
+  }).index("by_user", ["userId"]),
 });

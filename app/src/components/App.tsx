@@ -55,7 +55,6 @@ import {
   useFileHandling,
   useBulkUpscale,
   useUser,
-  useCaption,
 } from "../hooks";
 
 export function App() {
@@ -101,13 +100,6 @@ export function App() {
 
   // User hook for Convex user ID
   const { userId } = useUser();
-
-  // Caption generation hook
-  const {
-    generateCaption,
-    isGenerating: isGeneratingCaption,
-    isAvailable: isCaptionAvailable,
-  } = useCaption();
 
   // Convex queries and mutations for CSV import
   const metaObjects = useConvexQuery(
@@ -245,20 +237,6 @@ export function App() {
     },
     [selectedImageId, setImages],
   );
-
-  const handleGenerateCaption = useCallback(async () => {
-    if (!selectedImage) return;
-
-    try {
-      const caption = await generateCaption(selectedImage.file);
-      handleCaptionChange(caption);
-      toast.success("Caption generated");
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to generate caption";
-      toast.error(message);
-    }
-  }, [selectedImage, generateCaption, handleCaptionChange]);
 
   const handleSelectImage = useCallback(
     (id: string) => {
@@ -682,10 +660,6 @@ export function App() {
                 currentIndex={currentIndex}
                 totalImages={images.length}
                 onCaptionChange={handleCaptionChange}
-                onGenerateCaption={handleGenerateCaption}
-                isGeneratingCaption={isGeneratingCaption}
-                isCaptionAvailable={isCaptionAvailable}
-                onOpenCaptionSettings={() => setSettingsSection("integrations")}
               />
             </div>
 

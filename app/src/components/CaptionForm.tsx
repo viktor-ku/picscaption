@@ -1,15 +1,13 @@
-import { FileImage, Wand2, Loader2 } from "lucide-react";
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
+import { FileImage } from "lucide-react";
 import type { ImageData } from "../types";
+import { CaptionsTab } from "./CaptionsTab";
 
 interface CaptionFormProps {
   selectedImage: ImageData | null;
   currentIndex: number;
   totalImages: number;
   onCaptionChange: (caption: string) => void;
-  onGenerateCaption: () => void;
-  isGeneratingCaption: boolean;
-  isCaptionAvailable: boolean;
-  onOpenCaptionSettings: () => void;
 }
 
 export function CaptionForm({
@@ -17,10 +15,6 @@ export function CaptionForm({
   currentIndex,
   totalImages,
   onCaptionChange,
-  onGenerateCaption,
-  isGeneratingCaption,
-  isCaptionAvailable,
-  onOpenCaptionSettings,
 }: CaptionFormProps) {
   if (!selectedImage) {
     return (
@@ -38,90 +32,90 @@ export function CaptionForm({
   }
 
   return (
-    <div className="flex flex-col h-full p-6">
-      <div className="space-y-4 flex-1">
-        <div>
-          <span className="block text-sm font-medium text-gray-700 mb-1">
-            Filename
-          </span>
-          <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-600 truncate">
-            {selectedImage.fileName}
-          </div>
-        </div>
+    <div className="flex flex-col h-full">
+      <TabGroup className="flex flex-col h-full">
+        <TabList className="flex gap-1 p-2 border-b border-gray-200 bg-gray-50">
+          <Tab className="px-4 py-2 text-sm font-medium rounded-lg transition-colors data-[selected]:bg-white data-[selected]:text-primary data-[selected]:shadow-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 focus:outline-none">
+            General
+          </Tab>
+          <Tab className="px-4 py-2 text-sm font-medium rounded-lg transition-colors data-[selected]:bg-white data-[selected]:text-primary data-[selected]:shadow-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 focus:outline-none">
+            Captions
+          </Tab>
+        </TabList>
 
-        <div>
-          <span className="block text-sm font-medium text-gray-700 mb-1">
-            Namespace
-          </span>
-          <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-600 truncate">
-            {selectedImage.namespace}
-          </div>
-        </div>
+        <TabPanels className="flex-1 overflow-hidden">
+          {/* General Tab - existing content */}
+          <TabPanel className="h-full overflow-auto">
+            <div className="flex flex-col h-full p-6">
+              <div className="space-y-4 flex-1">
+                <div>
+                  <span className="block text-sm font-medium text-gray-700 mb-1">
+                    Filename
+                  </span>
+                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-600 truncate">
+                    {selectedImage.fileName}
+                  </div>
+                </div>
 
-        <div>
-          <span className="block text-sm font-medium text-gray-700 mb-1">
-            Original Size
-          </span>
-          <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-600">
-            {selectedImage.width && selectedImage.height
-              ? `${selectedImage.width}px × ${selectedImage.height}px`
-              : "Loading..."}
-          </div>
-        </div>
+                <div>
+                  <span className="block text-sm font-medium text-gray-700 mb-1">
+                    Namespace
+                  </span>
+                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-600 truncate">
+                    {selectedImage.namespace}
+                  </div>
+                </div>
 
-        <div className="flex-1 flex flex-col">
-          <div className="flex items-center justify-between mb-1">
-            <label
-              htmlFor="caption"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Caption
-            </label>
-            <button
-              type="button"
-              onClick={
-                isCaptionAvailable ? onGenerateCaption : onOpenCaptionSettings
-              }
-              disabled={isGeneratingCaption}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                isCaptionAvailable
-                  ? "bg-purple-100 text-purple-700 hover:bg-purple-200"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-              }`}
-              title={
-                isCaptionAvailable
-                  ? "Generate caption with AI"
-                  : "No caption models available - click to configure"
-              }
-            >
-              {isGeneratingCaption ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Wand2 className="w-3.5 h-3.5" />
-              )}
-              AI
-            </button>
-          </div>
-          <textarea
-            id="caption"
-            value={selectedImage.caption}
-            onChange={(e) => onCaptionChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                e.currentTarget.blur();
-              }
-            }}
-            placeholder="Enter a caption for this image..."
-            className="flex-1 min-h-32 px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-          />
-        </div>
-      </div>
+                <div>
+                  <span className="block text-sm font-medium text-gray-700 mb-1">
+                    Original Size
+                  </span>
+                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-600">
+                    {selectedImage.width && selectedImage.height
+                      ? `${selectedImage.width}px × ${selectedImage.height}px`
+                      : "Loading..."}
+                  </div>
+                </div>
 
-      <div className="mt-6">
-        <span className="text-sm text-gray-500">
-          Image {currentIndex + 1} of {totalImages}
-        </span>
-      </div>
+                <div className="flex-1 flex flex-col">
+                  <label
+                    htmlFor="caption"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Caption
+                  </label>
+                  <textarea
+                    id="caption"
+                    value={selectedImage.caption}
+                    onChange={(e) => onCaptionChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    placeholder="Enter a caption for this image..."
+                    className="flex-1 min-h-32 px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <span className="text-sm text-gray-500">
+                  Image {currentIndex + 1} of {totalImages}
+                </span>
+              </div>
+            </div>
+          </TabPanel>
+
+          {/* Captions Tab - advanced workflow */}
+          <TabPanel className="h-full overflow-auto">
+            <CaptionsTab
+              selectedImage={selectedImage}
+              onCaptionChange={onCaptionChange}
+            />
+          </TabPanel>
+        </TabPanels>
+      </TabGroup>
     </div>
   );
 }

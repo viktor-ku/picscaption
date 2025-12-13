@@ -53,9 +53,9 @@ export const CAPTION_MODEL_INFO = {
     provider: "ai3",
   } as CaptionModelInfo,
   // Cloud models
-  "google/gemini-2.0-flash-exp:free": {
-    name: "Google: Gemini 2.0 Flash Experimental",
-    description: "TODO",
+  "openai/gpt-5-nano": {
+    name: "OpenAI: GPT-5 Nano",
+    description: "Tiny yet powerful model by GPT",
     provider: "openrouter",
   } as CaptionModelInfo,
 };
