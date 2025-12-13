@@ -123,6 +123,29 @@ export const importModalOpenAtom = atom<boolean>(false);
 /** Signal to cancel ongoing import */
 export const importCancelledAtom = atom<boolean>(false);
 
+/** Bulk caption state: idle, captioning, done, or cancelled */
+export type BulkCaptionState = "idle" | "captioning" | "done" | "cancelled";
+export const bulkCaptionStateAtom = atom<BulkCaptionState>("idle");
+
+/** Bulk caption progress (current image / total images) */
+export interface BulkCaptionProgress {
+  current: number;
+  total: number;
+}
+export const bulkCaptionProgressAtom = atom<BulkCaptionProgress | null>(null);
+
+/** Bulk caption statistics for tracking success/error counts and timing */
+export interface BulkCaptionStats {
+  success: number;
+  errors: number;
+  startTime: number; // Date.now() when captioning started
+  endTime?: number; // Date.now() when captioning finished
+}
+export const bulkCaptionStatsAtom = atom<BulkCaptionStats | null>(null);
+
+/** Signal to cancel ongoing bulk caption */
+export const bulkCaptionCancelledAtom = atom<boolean>(false);
+
 // ============================================================================
 // Derived Atoms (computed from other atoms)
 // ============================================================================

@@ -16,3 +16,8 @@ export {
   type UseCaptionsWorkflowOptions,
   type UseCaptionsWorkflowReturn,
 } from "./useCaptionsWorkflow";
+export {
+  useBulkCaption,
+  type UseBulkCaptionOptions,
+  type UseBulkCaptionReturn,
+} from "./useBulkCaption";

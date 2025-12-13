@@ -18,3 +18,4 @@ export {
   useConvexAvailable,
 } from "./ConvexClientProvider";
 export { CaptionsTab } from "./CaptionsTab";
+export { BulkCaptionsDrawer } from "./BulkCaptionsDrawer";

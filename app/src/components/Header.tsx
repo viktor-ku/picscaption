@@ -26,6 +26,11 @@ interface BulkUpscaleProgress {
   total: number;
 }
 
+interface BulkCaptionProgress {
+  current: number;
+  total: number;
+}
+
 interface HeaderProps {
   imageCount: number;
   captionedCount: number;
@@ -35,7 +40,9 @@ interface HeaderProps {
   onShowSettings: () => void;
   onBulkEdit: () => void;
   onBulkUpscale: () => void;
+  onBulkCaption: () => void;
   bulkUpscaleProgress?: BulkUpscaleProgress | null;
+  bulkCaptionProgress?: BulkCaptionProgress | null;
 }
 
 export function Header({
@@ -47,13 +54,20 @@ export function Header({
   onShowSettings,
   onBulkEdit,
   onBulkUpscale,
+  onBulkCaption,
   bulkUpscaleProgress,
+  bulkCaptionProgress,
 }: HeaderProps) {
   const hasImages = imageCount > 0;
   const isUpscaling =
     bulkUpscaleProgress !== null && bulkUpscaleProgress !== undefined;
-  const progressPercent = isUpscaling
+  const isCaptioning =
+    bulkCaptionProgress !== null && bulkCaptionProgress !== undefined;
+  const upscaleProgressPercent = isUpscaling
     ? (bulkUpscaleProgress.current / bulkUpscaleProgress.total) * 100
+    : 0;
+  const captionProgressPercent = isCaptioning
+    ? (bulkCaptionProgress.current / bulkCaptionProgress.total) * 100
     : 0;
   const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -143,10 +157,23 @@ export function Header({
                   disabled={!hasImages}
                   className={clsx(
                     "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer disabled:text-gray-500",
+                    isCaptioning && "bg-primary/10 text-primary",
                   )}
                 >
-                  <Sparkles className="w-4 h-4" />
-                  Bulk
+                  {isCaptioning ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="tabular-nums">
+                        {bulkCaptionProgress.current}/
+                        {bulkCaptionProgress.total}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      Bulk
+                    </>
+                  )}
                   <ChevronDown
                     className={clsx(
                       "w-4 h-4 transition-transform",
@@ -164,9 +191,23 @@ export function Header({
                     {({ focus }) => (
                       <button
                         type="button"
-                        onMouseDownCapture={() => onBulkUpscale()}
+                        onMouseDownCapture={() => onBulkCaption()}
                         className={clsx(
                           "w-full px-4 py-2.5 text-left text-sm text-gray-700 flex items-center gap-2 transition-colors cursor-pointer",
+                          focus && "bg-gray-50",
+                        )}
+                      >
+                        <span className="font-medium">Bulk Captions</span>
+                      </button>
+                    )}
+                  </MenuItem>
+                  <MenuItem>
+                    {({ focus }) => (
+                      <button
+                        type="button"
+                        onMouseDownCapture={() => onBulkUpscale()}
+                        className={clsx(
+                          "w-full px-4 py-2.5 text-left text-sm text-gray-700 flex items-center gap-2 border-t border-gray-100 transition-colors cursor-pointer",
                           focus && "bg-gray-50",
                         )}
                       >
@@ -343,11 +384,29 @@ export function Header({
             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className="h-full bg-primary transition-all duration-300 ease-out"
-                style={{ width: `${progressPercent}%` }}
+                style={{ width: `${upscaleProgressPercent}%` }}
               />
             </div>
             <span className="text-xs text-gray-500 tabular-nums whitespace-nowrap">
               {bulkUpscaleProgress.current}/{bulkUpscaleProgress.total} upscaled
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk caption progress bar */}
+      {isCaptioning && (
+        <div className="px-6 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-300 ease-out"
+                style={{ width: `${captionProgressPercent}%` }}
+              />
+            </div>
+            <span className="text-xs text-gray-500 tabular-nums whitespace-nowrap">
+              {bulkCaptionProgress.current}/{bulkCaptionProgress.total}{" "}
+              captioned
             </span>
           </div>
         </div>

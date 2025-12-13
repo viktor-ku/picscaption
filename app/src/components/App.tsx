@@ -14,6 +14,7 @@ import {
   KeybindingsModal,
   BulkEditModal,
   BulkUpscaleModal,
+  BulkCaptionsDrawer,
   GenerateModal,
   type GenerateOptions,
   SettingsModal,
@@ -64,6 +65,7 @@ import {
   useKeyboardNavigation,
   useFileHandling,
   useBulkUpscale,
+  useBulkCaption,
   useUser,
 } from "../hooks";
 
@@ -94,6 +96,7 @@ export function App() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isBulkUpscaleOpen, setIsBulkUpscaleOpen] = useState(false);
+  const [isBulkCaptionsOpen, setIsBulkCaptionsOpen] = useState(false);
   const [isDeleteAllDataOpen, setIsDeleteAllDataOpen] = useState(false);
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -172,6 +175,17 @@ export function App() {
     directoryHandleRef,
     setImages,
   });
+
+  // Bulk caption hook
+  const {
+    startBulkCaption,
+    cancelBulkCaption,
+    state: bulkCaptionState,
+    progress: bulkCaptionProgress,
+    resetState: resetBulkCaptionState,
+    availableModels: bulkCaptionModels,
+    isAvailable: isBulkCaptionAvailable,
+  } = useBulkCaption();
 
   // Pane resize hook
   const {
@@ -864,7 +878,11 @@ export function App() {
         onShowSettings={() => setSettingsSection("general")}
         onBulkEdit={() => setIsBulkEditOpen(true)}
         onBulkUpscale={() => setIsBulkUpscaleOpen(true)}
+        onBulkCaption={() => setIsBulkCaptionsOpen(true)}
         bulkUpscaleProgress={bulkUpscaleProgress}
+        bulkCaptionProgress={
+          bulkCaptionState === "captioning" ? bulkCaptionProgress : null
+        }
       />
 
       <ImportModal
@@ -921,6 +939,18 @@ export function App() {
         imageCount={images.length}
         onClose={() => setIsBulkUpscaleOpen(false)}
         onStart={handleBulkUpscale}
+      />
+
+      <BulkCaptionsDrawer
+        isOpen={isBulkCaptionsOpen}
+        imageCount={images.length}
+        onClose={() => setIsBulkCaptionsOpen(false)}
+        onStart={startBulkCaption}
+        onCancel={cancelBulkCaption}
+        onReset={resetBulkCaptionState}
+        availableModels={bulkCaptionModels}
+        isAvailable={isBulkCaptionAvailable}
+        userId={userId}
       />
 
       <DeleteAllDataModal
